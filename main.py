@@ -64,6 +64,7 @@ Heading 3
     with col2:
         process_button = st.button("Process Text")
 
+    # Process text when button is clicked
     if process_button and input_text:
         try:
             processor = TextProcessor()
@@ -71,39 +72,47 @@ Heading 3
             st.session_state.processed_text = processed_content
             st.session_state.input_text = input_text  # Preserve input text
 
+            # Display processed text immediately
             st.success("Text processed successfully!")
 
-            # Display processed text immediately
-            st.subheader("Processed Output")
-            st.text_area("Preview", value=processed_content, height=200, key="processed_output")
-
-            # Export options
-            st.subheader("Export Options")
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                if st.button("Copy to Clipboard"):
-                    st.code(processed_content)  # Makes it easier to copy
-                    st.toast("Text ready to copy!")
-
-            with col2:
-                export_handler = ExportHandler()
-                docx_file = export_handler.generate_docx(processed_content)
-                st.download_button(
-                    label="Download DOCX",
-                    data=docx_file.getvalue(),
-                    file_name="processed_text.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            # Create a container for the output
+            output_container = st.container()
+            with output_container:
+                st.subheader("Processed Output")
+                output_text = st.text_area(
+                    "Preview",
+                    value=processed_content,
+                    height=300,
+                    key="processed_output"
                 )
 
-            with col3:
-                pdf_file = export_handler.generate_pdf(processed_content)
-                st.download_button(
-                    label="Download PDF",
-                    data=pdf_file.getvalue(),
-                    file_name="processed_text.pdf",
-                    mime="application/pdf"
-                )
+                # Export options
+                st.subheader("Export Options")
+                export_col1, export_col2, export_col3 = st.columns(3)
+
+                with export_col1:
+                    if st.button("Copy to Clipboard"):
+                        st.code(processed_content)
+                        st.toast("Text ready to copy!")
+
+                with export_col2:
+                    export_handler = ExportHandler()
+                    docx_file = export_handler.generate_docx(processed_content)
+                    st.download_button(
+                        label="Download DOCX",
+                        data=docx_file.getvalue(),
+                        file_name="processed_text.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+
+                with export_col3:
+                    pdf_file = export_handler.generate_pdf(processed_content)
+                    st.download_button(
+                        label="Download PDF",
+                        data=pdf_file.getvalue(),
+                        file_name="processed_text.pdf",
+                        mime="application/pdf"
+                    )
 
         except Exception as e:
             st.error(f"Error processing text: {str(e)}")
@@ -112,7 +121,12 @@ Heading 3
     # Show preserved processed text from previous runs
     elif st.session_state.processed_text and not process_button:
         st.subheader("Previous Output")
-        st.text_area("Preview", value=st.session_state.processed_text, height=200, key="previous_output")
+        st.text_area(
+            "Preview",
+            value=st.session_state.processed_text,
+            height=300,
+            key="previous_output"
+        )
 
         # Export options for previous output
         st.subheader("Export Options")

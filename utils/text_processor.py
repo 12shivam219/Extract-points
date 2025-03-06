@@ -7,7 +7,8 @@ class TextProcessor:
 
     def is_heading(self, line):
         """Check if a line is a heading."""
-        return bool(re.match(self.heading_pattern, line.strip())) and not line.strip().startswith('•') and not line.strip().startswith('-')
+        line = line.strip()
+        return bool(re.match(self.heading_pattern, line)) and not line.startswith('•') and not line.startswith('-')
 
     def is_bullet_point(self, line):
         """Check if a line is a bullet point."""
@@ -20,21 +21,25 @@ class TextProcessor:
 
     def process_text(self, text, points_per_cycle):
         """Process the input text and extract points in cycles."""
-        if not text.strip():
+        if not text or not text.strip():
             raise ValueError("Input text cannot be empty")
+
+        if points_per_cycle < 1:
+            raise ValueError("Points per cycle must be at least 1")
 
         # Split text into lines and process
         lines = text.split('\n')
         current_heading = None
         structured_content = {}
-        
+
         # First pass: organize content
         for line in lines:
-            if not line.strip():
+            line = line.strip()
+            if not line:
                 continue
-                
+
             if self.is_heading(line):
-                current_heading = line.strip()
+                current_heading = line
                 structured_content[current_heading] = []
             elif self.is_bullet_point(line) and current_heading:
                 point = self.extract_bullet_point(line)
@@ -42,7 +47,7 @@ class TextProcessor:
                     structured_content[current_heading].append(point)
 
         if not structured_content:
-            raise ValueError("No valid headings or bullet points found")
+            raise ValueError("No valid headings or bullet points found in the input text")
 
         # Second pass: extract points in cycles
         result = []
@@ -53,13 +58,14 @@ class TextProcessor:
             start_idx = current_cycle * points_per_cycle
             end_idx = start_idx + points_per_cycle
 
-            result.append(f"\nCycle {current_cycle + 1}:")
+            cycle_content = [f"\nCycle {current_cycle + 1}:"]
             for heading, points in structured_content.items():
-                result.append(f"\n{heading}")
+                cycle_content.append(f"\n{heading}")
                 cycle_points = points[start_idx:end_idx]
                 for point in cycle_points:
-                    result.append(f"• {point}")
+                    cycle_content.append(f"• {point}")
 
+            result.extend(cycle_content)
             current_cycle += 1
 
         return "\n".join(result)
