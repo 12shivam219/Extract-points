@@ -17,34 +17,34 @@ class BatchProcessor:
 
         for idx, file in enumerate(files):
             try:
-                # Read and decode the file content
+                # Read and decode the file content using the original filename
                 content = file.getvalue().decode('utf-8')
-                print(f"Processing file {idx + 1}...")  # Debug print
-                print(f"Content: {content[:100]}...")  # Debug print (first 100 chars)
+                filename = file.name
+                print(f"Processing file {filename}...")  # Debug print
 
                 # Process the text
                 processed_text = self.text_processor.process_text(content, points_per_cycle)
-                print(f"Processed text: {processed_text[:100]}...")  # Debug print
 
                 # Generate exports
                 docx_file = self.export_handler.generate_docx(processed_text)
                 pdf_file = self.export_handler.generate_pdf(processed_text)
 
-                # Store results
+                # Store results using original filename
                 results.append({
-                    f"file_{idx + 1}": (
+                    filename: (
                         processed_text,
                         docx_file.getvalue(),
                         pdf_file.getvalue()
                     )
                 })
-                print(f"Successfully processed file {idx + 1}")  # Debug print
+                print(f"Successfully processed {filename}")  # Debug print
 
             except Exception as e:
-                print(f"Error processing file {idx + 1}: {str(e)}")  # Debug print
+                error_msg = f"Error processing file: {str(e)}"
+                print(error_msg)  # Debug print
                 results.append({
-                    f"file_{idx + 1}": (
-                        f"Error: {str(e)}",
+                    file.name: (
+                        error_msg,
                         None,
                         None
                     )

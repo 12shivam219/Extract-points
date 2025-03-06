@@ -146,6 +146,8 @@ Heading 3
         )
 
         if uploaded_files:
+            st.info(f"Found {len(uploaded_files)} files to process")
+
             points_per_heading_batch = st.number_input(
                 "Number of points to extract per heading per cycle (batch)",
                 min_value=1,
@@ -163,11 +165,11 @@ Heading 3
                         if results:
                             st.success(f"Successfully processed {len(results)} files!")
 
-                            # Display individual results first
+                            # Display individual results
                             for result in results:
                                 for filename, (text, docx, pdf) in result.items():
                                     st.subheader(f"Results for {filename}")
-                                    if text.startswith("Error"):
+                                    if isinstance(text, str) and text.startswith("Error"):
                                         st.error(text)
                                     else:
                                         st.text_area(
@@ -202,7 +204,7 @@ Heading 3
                             with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
                                 for result in results:
                                     for filename, (text, docx, pdf) in result.items():
-                                        if text and not text.startswith("Error"):
+                                        if isinstance(text, str) and not text.startswith("Error"):
                                             # Add text file
                                             zip_file.writestr(f"{filename}.txt", text)
                                             # Add DOCX file
