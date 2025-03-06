@@ -123,7 +123,7 @@ Heading 1
 Heading 2
 • Item A
 • Item B
-
+            
 You can use •, -, *, +, or numbers (1. 2.) for bullet points.""")
             
         current_cycle = 0
@@ -135,12 +135,12 @@ You can use •, -, *, +, or numbers (1. 2.) for bullet points.""")
             print(f"\nProcessing Cycle {current_cycle + 1}")  # Debug print
 
             cycle_content = [f"Cycle {current_cycle + 1}:"]
+            cycle_points = []
             for heading, points in structured_content.items():
-                cycle_content.append(f"\n{heading}")
-                cycle_points = points[start_idx:min(end_idx, len(points))]  # Ensure we don't go out of bounds
-                for point in cycle_points:
-                    cycle_content.append(f"• {point}")
-                print(f"Added {len(cycle_points)} points for heading: {heading}")  # Debug print
+                cycle_points.extend(points[start_idx:min(end_idx, len(points))])  # Ensure we don't go out of bounds
+            for point in cycle_points:
+                cycle_content.append(f"• {point}")
+            print(f"Added {len(cycle_points)} points for cycle {current_cycle + 1}")  # Debug print
 
             result.extend(cycle_content)
             current_cycle += 1
