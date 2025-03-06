@@ -1,3 +1,4 @@
+
 import io
 from typing import List, Dict, Tuple
 from .text_processor import TextProcessor
@@ -8,28 +9,29 @@ class BatchProcessor:
         self.text_processor = TextProcessor()
         self.export_handler = ExportHandler()
 
-    def process_files(self, files: List[io.BytesIO], points_per_cycle: int) -> List[Dict[str, Tuple[str, bytes, bytes]]]:
+    def process_files(self, uploaded_files, points_per_heading) -> List[Dict[str, Tuple[str, bytes, bytes]]]:
         """
-        Process multiple text files and generate outputs in different formats.
-        Returns a list of dictionaries containing processed text and exported files.
+        Process multiple files and return their processed contents along with export formats.
+        
+        Returns:
+            List of dictionaries mapping filename to (text_content, docx_bytes, pdf_bytes)
         """
         results = []
-
-        for idx, file in enumerate(files):
+        
+        for uploaded_file in uploaded_files:
             try:
-                # Read and decode the file content using the original filename
-                content = file.getvalue().decode('utf-8')
-                filename = file.name
-                print(f"Processing file {filename}...")  # Debug print
-
+                # Read the file content
+                content = uploaded_file.read().decode('utf-8')
+                filename = uploaded_file.name.split('.')[0]  # Get filename without extension
+                
                 # Process the text
-                processed_text = self.text_processor.process_text(content, points_per_cycle)
-
-                # Generate exports
+                processed_text = self.text_processor.process_text(content, points_per_heading)
+                
+                # Generate export formats
                 docx_file = self.export_handler.generate_docx(processed_text)
                 pdf_file = self.export_handler.generate_pdf(processed_text)
-
-                # Store results using original filename
+                
+                # Add to results
                 results.append({
                     filename: (
                         processed_text,
@@ -37,17 +39,15 @@ class BatchProcessor:
                         pdf_file.getvalue()
                     )
                 })
-                print(f"Successfully processed {filename}")  # Debug print
-
+                
             except Exception as e:
-                error_msg = f"Error processing file: {str(e)}"
-                print(error_msg)  # Debug print
+                # Handle errors for individual files
                 results.append({
-                    file.name: (
-                        error_msg,
+                    uploaded_file.name: (
+                        f"Error processing {uploaded_file.name}: {str(e)}",
                         None,
                         None
                     )
                 })
-
+                
         return results

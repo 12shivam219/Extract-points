@@ -86,7 +86,16 @@ class TextProcessor:
 
         if not structured_content:
             print("Error: No valid content found")  # Debug print
-            raise ValueError("No valid headings or bullet points found in the input text. Please check your input format.")
+            raise ValueError("""No valid headings or bullet points found in the input text. 
+            
+Format example:
+Heading 1
+• Point 1
+• Point 2
+
+Heading 2
+• Item A
+• Item B""")
             
         # Log the structured content for debugging
         print("\nStructured content:")
@@ -104,7 +113,18 @@ class TextProcessor:
         
         if max_points == 0:
             print("Warning: No points found under headings")
-            raise ValueError("No points found under any headings. Please check your input format.")
+            raise ValueError("""No points found under any headings. Please check your input format.
+            
+Correct format example:
+Heading 1
+• Point 1
+• Point 2
+
+Heading 2
+• Item A
+• Item B
+
+You can use •, -, *, +, or numbers (1. 2.) for bullet points.""")
             
         current_cycle = 0
 
