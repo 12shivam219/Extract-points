@@ -31,9 +31,13 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run main.py --server.address=0.0.0.0 --server.port=5000 --server.headless=true --server.enableCORS=false"
+args = "streamlit run main.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true --server.enableXsrfProtection=false --server.enableCORS=false"
 waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8501
+externalPort = 3000
