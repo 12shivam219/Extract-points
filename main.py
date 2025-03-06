@@ -47,6 +47,12 @@ Heading 3
 • Task 3
 • Task 4"""
             st.session_state.input_text = sample_text
+            st.info("""
+            ℹ️ Format Guide:
+            - Each heading should be on its own line
+            - Bullet points should start with •, -, *, + or a number
+            - Leave a blank line between different headings
+            """)
         else:
             if 'input_text' not in st.session_state:
                 st.session_state.input_text = ""

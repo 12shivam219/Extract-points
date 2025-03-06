@@ -2,9 +2,9 @@ import re
 
 class TextProcessor:
     def __init__(self):
-        # Updated patterns to handle both bullet points and numbered lists
-        self.bullet_pattern = r'(?:•|\-|\d+\.)\s*(.*)'
-        self.heading_pattern = r'^(?!(?:•|\-|\d+\.))[A-Za-z].*$'
+        # More flexible patterns to handle various formats
+        self.bullet_pattern = r'(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\))\s*(.*)'
+        self.heading_pattern = r'^(?!(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\)))[A-Za-z0-9].*$'
 
     def is_heading(self, line):
         """Check if a line is a heading."""
@@ -43,32 +43,69 @@ class TextProcessor:
 
         # Split text into lines and process
         lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        if not lines:
+            print("Error: No valid lines found after splitting")
+            raise ValueError("No valid text content found after splitting")
+            
+        # Ensure we have at least one heading by setting a default if none is found
+        has_heading = any(self.is_heading(line) for line in lines)
+        if not has_heading:
+            print("Warning: No explicit headings found, treating first line as heading")
+            
         current_heading = None
         structured_content = {}
 
         print("\nFirst pass - organizing content:")  # Debug print
         # First pass: organize content
-        for line in lines:
-            print(f"Processing line: {line}")  # Debug print
+        for i, line in enumerate(lines):
+            print(f"Processing line {i+1}: {line}")  # Debug print
 
-            if self.is_heading(line):
+            # If no heading is found and this is the first line, treat it as a heading
+            if current_heading is None and i == 0 and not has_heading:
+                current_heading = line
+                structured_content[current_heading] = []
+                print(f"Using first line as heading: {current_heading}")
+            elif self.is_heading(line):
                 current_heading = line
                 structured_content[current_heading] = []
                 print(f"Found heading: {current_heading}")  # Debug print
-            elif self.is_bullet_point(line) and current_heading:
-                point = self.extract_bullet_point(line)
-                if point:
-                    structured_content[current_heading].append(point)
-                    print(f"Added point: {point} to heading: {current_heading}")  # Debug print
+            elif current_heading is not None:  # If we have a heading, treat any non-heading as a potential bullet point
+                # Check if it's a bullet point
+                if self.is_bullet_point(line):
+                    point = self.extract_bullet_point(line)
+                    if point:
+                        structured_content[current_heading].append(point)
+                        print(f"Added bullet point: {point} to heading: {current_heading}")
+                else:
+                    # If it's not recognized as a bullet point, add it as a plain point
+                    structured_content[current_heading].append(line)
+                    print(f"Added plain text as point: {line} to heading: {current_heading}")
+            else:
+                print(f"Warning: Line ignored, no current heading: {line}")
 
         if not structured_content:
             print("Error: No valid content found")  # Debug print
-            raise ValueError("No valid headings or bullet points found in the input text")
+            raise ValueError("No valid headings or bullet points found in the input text. Please check your input format.")
+            
+        # Log the structured content for debugging
+        print("\nStructured content:")
+        for heading, points in structured_content.items():
+            print(f"Heading: {heading}")
+            for point in points:
+                print(f"  • {point}")
 
         print("\nSecond pass - creating cycles:")  # Debug print
         # Second pass: extract points in cycles
         result = []
-        max_points = max(len(points) for points in structured_content.values())
+        
+        # Get the maximum number of points across all headings
+        max_points = max(len(points) for points in structured_content.values()) if structured_content else 0
+        
+        if max_points == 0:
+            print("Warning: No points found under headings")
+            raise ValueError("No points found under any headings. Please check your input format.")
+            
         current_cycle = 0
 
         while current_cycle * points_per_cycle < max_points:
@@ -80,13 +117,17 @@ class TextProcessor:
             cycle_content = [f"Cycle {current_cycle + 1}:"]
             for heading, points in structured_content.items():
                 cycle_content.append(f"\n{heading}")
-                cycle_points = points[start_idx:end_idx]
+                cycle_points = points[start_idx:min(end_idx, len(points))]  # Ensure we don't go out of bounds
                 for point in cycle_points:
                     cycle_content.append(f"• {point}")
                 print(f"Added {len(cycle_points)} points for heading: {heading}")  # Debug print
 
             result.extend(cycle_content)
             current_cycle += 1
+
+        if not result:
+            print("Error: No result generated")
+            raise ValueError("Failed to generate output. Please check your input format.")
 
         final_text = "\n".join(result)
         print(f"\nFinal processed text:\n{final_text}")  # Debug print
