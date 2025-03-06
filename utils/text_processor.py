@@ -2,15 +2,16 @@ import re
 
 class TextProcessor:
     def __init__(self):
-        self.bullet_pattern = r'[•\-]\s*(.*)'
-        self.heading_pattern = r'^[A-Za-z].*$'
+        # Updated patterns to handle both bullet points and numbered lists
+        self.bullet_pattern = r'(?:•|\-|\d+\.)\s*(.*)'
+        self.heading_pattern = r'^(?!(?:•|\-|\d+\.))[A-Za-z].*$'
 
     def is_heading(self, line):
         """Check if a line is a heading."""
         line = line.strip()
         # Add print for debugging
         print(f"Checking if heading: {line}")
-        return bool(re.match(self.heading_pattern, line)) and not line.startswith('•') and not line.startswith('-')
+        return bool(re.match(self.heading_pattern, line))
 
     def is_bullet_point(self, line):
         """Check if a line is a bullet point."""
@@ -41,17 +42,13 @@ class TextProcessor:
             raise ValueError("Points per cycle must be at least 1")
 
         # Split text into lines and process
-        lines = text.split('\n')
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
         current_heading = None
         structured_content = {}
 
         print("\nFirst pass - organizing content:")  # Debug print
         # First pass: organize content
         for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
             print(f"Processing line: {line}")  # Debug print
 
             if self.is_heading(line):
@@ -80,7 +77,7 @@ class TextProcessor:
 
             print(f"\nProcessing Cycle {current_cycle + 1}")  # Debug print
 
-            cycle_content = [f"\nCycle {current_cycle + 1}:"]
+            cycle_content = [f"Cycle {current_cycle + 1}:"]
             for heading, points in structured_content.items():
                 cycle_content.append(f"\n{heading}")
                 cycle_points = points[start_idx:end_idx]
