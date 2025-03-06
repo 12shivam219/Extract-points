@@ -36,3 +36,19 @@ pip install streamlit python-docx reportlab
 ```bash
 streamlit run main.py
 ```
+
+## Correct FOrmat :
+
+Heading 1
+• Point 1
+• Point 2
+• Point 3
+
+Heading 2
+• Item A
+• Item B
+• Item C
+
+Heading 3
+• Task 1
+• Task 2
