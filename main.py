@@ -1,7 +1,6 @@
 import streamlit as st
 from utils.text_processor import TextProcessor
 from utils.export_handler import ExportHandler
-import io
 
 def main():
     st.set_page_config(
@@ -67,56 +66,61 @@ Heading 3
     # Process text when button is clicked
     if process_button and input_text:
         try:
-            processor = TextProcessor()
-            processed_content = processor.process_text(input_text, points_per_heading)
-            st.session_state.processed_text = processed_content
-            st.session_state.input_text = input_text  # Preserve input text
+            # Create a spinner to show processing status
+            with st.spinner('Processing text...'):
+                processor = TextProcessor()
+                processed_content = processor.process_text(input_text, points_per_heading)
 
-            # Display processed text immediately
-            st.success("Text processed successfully!")
+                if processed_content:
+                    st.session_state.processed_text = processed_content
+                    st.session_state.input_text = input_text  # Preserve input text
 
-            # Create a container for the output
-            output_container = st.container()
-            with output_container:
-                st.subheader("Processed Output")
-                output_text = st.text_area(
-                    "Preview",
-                    value=processed_content,
-                    height=300,
-                    key="processed_output"
-                )
+                    st.success("Text processed successfully!")
 
-                # Export options
-                st.subheader("Export Options")
-                export_col1, export_col2, export_col3 = st.columns(3)
+                    # Display processed output in a container
+                    with st.container():
+                        st.subheader("Processed Output")
+                        st.text_area(
+                            "Preview",
+                            value=processed_content,
+                            height=300,
+                            key="processed_output"
+                        )
 
-                with export_col1:
-                    if st.button("Copy to Clipboard"):
-                        st.code(processed_content)
-                        st.toast("Text ready to copy!")
+                        # Export options
+                        st.subheader("Export Options")
+                        export_col1, export_col2, export_col3 = st.columns(3)
 
-                with export_col2:
-                    export_handler = ExportHandler()
-                    docx_file = export_handler.generate_docx(processed_content)
-                    st.download_button(
-                        label="Download DOCX",
-                        data=docx_file.getvalue(),
-                        file_name="processed_text.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    )
+                        with export_col1:
+                            if st.button("Copy to Clipboard"):
+                                st.code(processed_content)
+                                st.toast("Text ready to copy!")
 
-                with export_col3:
-                    pdf_file = export_handler.generate_pdf(processed_content)
-                    st.download_button(
-                        label="Download PDF",
-                        data=pdf_file.getvalue(),
-                        file_name="processed_text.pdf",
-                        mime="application/pdf"
-                    )
+                        with export_col2:
+                            export_handler = ExportHandler()
+                            docx_file = export_handler.generate_docx(processed_content)
+                            st.download_button(
+                                label="Download DOCX",
+                                data=docx_file.getvalue(),
+                                file_name="processed_text.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+
+                        with export_col3:
+                            pdf_file = export_handler.generate_pdf(processed_content)
+                            st.download_button(
+                                label="Download PDF",
+                                data=pdf_file.getvalue(),
+                                file_name="processed_text.pdf",
+                                mime="application/pdf"
+                            )
+                else:
+                    st.error("No output was generated. Please check your input format.")
 
         except Exception as e:
             st.error(f"Error processing text: {str(e)}")
             st.info("Please ensure your text follows the correct format with headings and bullet points.")
+            print(f"Processing error: {str(e)}")  # Debug print
 
     # Show preserved processed text from previous runs
     elif st.session_state.processed_text and not process_button:
