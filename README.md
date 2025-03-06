@@ -1,3 +1,4 @@
+
 # Text Processing Application
 
 A Streamlit-based text processing application designed to extract, reorganize, and transform structured content with multiple export capabilities.
@@ -67,8 +68,7 @@ Heading 2
 streamlit run main.py
 ```
 
-<<<<<<< HEAD
-## Correct FOrmat :
+## Correct Format
 
 Heading 1
 • Point 1
@@ -83,7 +83,7 @@ Heading 2
 Heading 3
 • Task 1
 • Task 2
-=======
+
 ## Development
 
 The application is structured as follows:
@@ -99,4 +99,3 @@ Feel free to submit issues and enhancement requests!
 ## License
 
 MIT
->>>>>>> f4ba212 (Add batch processing functionality to the text processing application, allowing users to process multiple files simultaneously and download results as DOCX and PDF.)
