@@ -159,42 +159,23 @@ Heading 3
                     try:
                         batch_processor = BatchProcessor()
                         results = batch_processor.process_files(uploaded_files, points_per_heading_batch)
-                        st.session_state.batch_results = results
 
                         if results:
                             st.success(f"Successfully processed {len(results)} files!")
 
-                            # Create ZIP file for batch download
-                            zip_buffer = io.BytesIO()
-                            with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-                                for result in results:
-                                    for filename, (text, docx, pdf) in result.items():
-                                        if text and not text.startswith("Error"):
-                                            # Add text file
-                                            zip_file.writestr(f"{filename}.txt", text)
-                                            # Add DOCX file
-                                            if docx:
-                                                zip_file.writestr(f"{filename}.docx", docx)
-                                            # Add PDF file
-                                            if pdf:
-                                                zip_file.writestr(f"{filename}.pdf", pdf)
-
-                            # Download button for ZIP file
-                            st.download_button(
-                                label="Download All Results",
-                                data=zip_buffer.getvalue(),
-                                file_name="processed_files.zip",
-                                mime="application/zip"
-                            )
-
-                            # Display individual results
+                            # Display individual results first
                             for result in results:
                                 for filename, (text, docx, pdf) in result.items():
                                     st.subheader(f"Results for {filename}")
                                     if text.startswith("Error"):
                                         st.error(text)
                                     else:
-                                        st.text_area("Processed Text", value=text, height=200, key=filename)
+                                        st.text_area(
+                                            "Processed Text",
+                                            value=text,
+                                            height=200,
+                                            key=f"batch_{filename}"
+                                        )
                                         col1, col2 = st.columns(2)
                                         with col1:
                                             if docx:
@@ -214,8 +195,36 @@ Heading 3
                                                     mime="application/pdf",
                                                     key=f"{filename}_pdf"
                                                 )
+
+                            # Create ZIP file for batch download
+                            st.subheader("Download All Results")
+                            zip_buffer = io.BytesIO()
+                            with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+                                for result in results:
+                                    for filename, (text, docx, pdf) in result.items():
+                                        if text and not text.startswith("Error"):
+                                            # Add text file
+                                            zip_file.writestr(f"{filename}.txt", text)
+                                            # Add DOCX file
+                                            if docx:
+                                                zip_file.writestr(f"{filename}.docx", docx)
+                                            # Add PDF file
+                                            if pdf:
+                                                zip_file.writestr(f"{filename}.pdf", pdf)
+
+                            st.download_button(
+                                label="Download All Files (ZIP)",
+                                data=zip_buffer.getvalue(),
+                                file_name="processed_files.zip",
+                                mime="application/zip",
+                                key="batch_zip"
+                            )
+                        else:
+                            st.warning("No files were processed. Please check your input files.")
+
                     except Exception as e:
                         st.error(f"Error during batch processing: {str(e)}")
+                        st.info("Please ensure all files contain valid headings and bullet points.")
 
 if __name__ == "__main__":
     main()
