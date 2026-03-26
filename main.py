@@ -132,10 +132,21 @@ Heading 3
                     else:
                         st.error("No output was generated. Please check your input format.")
 
+            except ValueError as e:
+                st.error(f"❌ Input Error: {str(e)}")
+                st.warning("📋 Expected format example:")
+                st.code("""Heading 1
+• Point 1
+• Point 2
+
+Heading 2
+• Item A
+• Item B""")
             except Exception as e:
-                st.error(f"Error processing text: {str(e)}")
-                st.info("Please ensure your text follows the correct format with headings and bullet points.")
-                print(f"Processing error: {str(e)}")  # Debug print
+                st.error(f"❌ Unexpected error: {type(e).__name__}")
+                st.info(f"Please try again or contact support if the issue persists.")
+                with st.expander("Technical details"):
+                    st.code(str(e))
 
     with tab2:
         # Batch processing UI
@@ -230,9 +241,14 @@ Heading 3
                         else:
                             st.warning("No files were processed. Please check your input files.")
 
+                    except ValueError as e:
+                        st.error(f"❌ Format Error: {str(e)}")
+                        st.warning("Check that all files contain properly formatted headings and bullet points.")
                     except Exception as e:
-                        st.error(f"Error during batch processing: {str(e)}")
-                        st.info("Please ensure all files contain valid headings and bullet points.")
+                        st.error(f"❌ Batch Processing Failed: {type(e).__name__}")
+                        st.info("Some files may have failed to process. Check file formats and try again.")
+                        with st.expander("Technical details"):
+                            st.code(str(e))
 
 if __name__ == "__main__":
     main()

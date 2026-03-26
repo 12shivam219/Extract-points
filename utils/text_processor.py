@@ -47,6 +47,10 @@ class TextProcessor:
 
         # First pass: organize content
         for i, line in enumerate(lines):
+            # Skip lines that are only underscores
+            if line.replace('_', '').strip() == '':
+                continue
+            
             # If no heading is found and this is the first line, treat it as a heading
             if current_heading is None and i == 0 and not has_heading:
                 current_heading = line

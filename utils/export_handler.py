@@ -1,14 +1,33 @@
 import io
 from docx import Document
-from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.enums import TA_LEFT
 
 class ExportHandler:
     def __init__(self):
-        self.max_text_width = 7.5  # inches for text wrapping
+        self.styles = getSampleStyleSheet()
+        self._setup_custom_styles()
+
+    def _setup_custom_styles(self):
+        """Setup custom paragraph styles for PDF generation."""
+        self.styles.add(ParagraphStyle(
+            name='CycleHeading',
+            parent=self.styles['Heading1'],
+            fontSize=14,
+            textColor='#000000',
+            spaceAfter=12,
+            spaceBefore=6
+        ))
+        self.styles.add(ParagraphStyle(
+            name='ContentText',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            spaceAfter=6,
+            leading=14
+        ))
 
     def generate_docx(self, content):
         """Generate a DOCX file from the processed text."""
@@ -35,87 +54,35 @@ class ExportHandler:
 
         return docx_file
 
-    def _wrap_text(self, text, max_width):
-        """Wrap text to fit within max_width (in characters approximately)."""
-        words = text.split()
-        lines = []
-        current_line = []
-        
-        for word in words:
-            current_line.append(word)
-            if len(' '.join(current_line)) > max_width:
-                if len(current_line) > 1:
-                    current_line.pop()  # Remove word that caused overflow
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-                else:
-                    lines.append(' '.join(current_line))
-                    current_line = []
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        return lines
-
     def generate_pdf(self, content):
         """Generate a PDF file from the processed text with proper text wrapping and pagination."""
         pdf_file = io.BytesIO()
-        c = canvas.Canvas(pdf_file, pagesize=letter)
-        width, height = letter
+        doc = SimpleDocTemplate(
+            pdf_file,
+            pagesize=letter,
+            rightMargin=50,
+            leftMargin=50,
+            topMargin=50,
+            bottomMargin=50
+        )
 
-        # Set font and margins
-        margin = 50
-        top_margin = height - 50
-        bottom_margin = 50
-        y_position = top_margin
-        font_size_normal = 11
-        font_size_heading_cycle = 14
-
-        # Split the content by newlines
+        # Build story of elements
+        story = []
         lines = content.split('\n')
 
         for line in lines:
             line = line.strip()
             if not line:
-                # Add extra space for blank lines
-                y_position -= 10
-                if y_position < bottom_margin + 20:
-                    c.showPage()
-                    y_position = top_margin
+                story.append(Spacer(1, 0.1 * inch))
                 continue
 
             # Determine line type and formatting
             if line.startswith('Cycle'):
-                # Cycle heading
-                c.setFont("Helvetica-Bold", font_size_heading_cycle)
-                wrapped_lines = self._wrap_text(line, 80)
-                for wrapped_line in wrapped_lines:
-                    if y_position < bottom_margin + font_size_heading_cycle:
-                        c.showPage()
-                        y_position = top_margin
-                    c.drawString(margin, y_position, wrapped_line)
-                    y_position -= font_size_heading_cycle + 5
-                c.setFont("Helvetica", font_size_normal)
-                y_position -= 5
-                
+                story.append(Paragraph(line, self.styles['CycleHeading']))
             else:
-                # Regular content line
-                c.setFont("Helvetica", font_size_normal)
-                wrapped_lines = self._wrap_text(line, 90)
-                
-                for wrapped_line in wrapped_lines:
-                    if y_position < bottom_margin + font_size_normal:
-                        c.showPage()
-                        y_position = top_margin
-                    
-                    c.drawString(margin + 20, y_position, wrapped_line)
-                    y_position -= font_size_normal + 4
+                story.append(Paragraph(line, self.styles['ContentText']))
 
-            # Check if new page is needed
-            if y_position < bottom_margin + 20:
-                c.showPage()
-                y_position = top_margin
-
-        c.save()
+        # Build PDF
+        doc.build(story)
         pdf_file.seek(0)
         return pdf_file
