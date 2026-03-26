@@ -2,6 +2,7 @@ import streamlit as st
 from utils.text_processor import TextProcessor
 from utils.export_handler import ExportHandler
 from utils.batch_processor import BatchProcessor
+from utils.resume_injector import ResumeInjector
 import io
 import zipfile
 
@@ -24,7 +25,7 @@ def main():
         st.session_state.batch_results = None
 
     # Create tabs for single and batch processing
-    tab1, tab2 = st.tabs(["Single File Processing", "Batch Processing"])
+    tab1, tab2, tab3 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection"])
 
     with tab1:
         # Single file processing UI
@@ -249,6 +250,142 @@ Heading 2
                         st.info("Some files may have failed to process. Check file formats and try again.")
                         with st.expander("Technical details"):
                             st.code(str(e))
+
+    with tab3:
+        # Resume Template Injection UI
+        st.subheader("Resume Template Injection")
+        st.markdown("""
+        Inject extracted points into your resume template while preserving all formatting.
+        
+        **Setup Instructions:**
+        1. Use the template file provided or ensure your resume has bookmarks for injection points
+        2. Upload your resume template (DOCX with bookmarks)
+        3. Upload or process your structured text to extract points
+        4. The system will inject new points after existing ones
+        """)
+        
+        # Step 1: Upload resume template
+        st.markdown("### Step 1: Upload Resume Template")
+        resume_file = st.file_uploader(
+            "Upload your resume template (DOCX with bookmarks)",
+            type=['docx'],
+            key="resume_upload"
+        )
+        
+        if resume_file:
+            try:
+                resume_bytes = io.BytesIO(resume_file.read())
+                injector = ResumeInjector()
+                bookmarks = injector.get_available_bookmarks(resume_bytes)
+                
+                st.success(f"✅ Resume template loaded")
+                if bookmarks:
+                    st.info(f"Found {len(bookmarks)} injection point(s): {', '.join(bookmarks)}")
+                resume_bytes.seek(0)
+                
+            except Exception as e:
+                st.error(f"❌ Error reading resume template: {str(e)}")
+                st.info("Ensure your resume is a valid DOCX file with bookmarks.")
+                resume_file = None
+        
+        if resume_file:
+            # Step 2: Get processed text
+            st.markdown("### Step 2: Provide Extracted Points")
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                input_method = st.radio(
+                    "How would you like to provide extracted points?",
+                    ["Paste Text", "Upload File"],
+                    key="resume_input_method"
+                )
+            
+            processed_text = None
+            
+            if input_method == "Paste Text":
+                processed_text = st.text_area(
+                    "Paste your processed text here",
+                    height=250,
+                    help="Text should contain headings followed by bullet points",
+                    key="resume_text_input"
+                )
+            else:
+                text_file = st.file_uploader(
+                    "Upload text file with extracted points",
+                    type=['txt'],
+                    key="resume_text_upload"
+                )
+                if text_file:
+                    try:
+                        processed_text = text_file.read().decode('utf-8')
+                    except Exception as e:
+                        st.error(f"❌ Error reading text file: {str(e)}")
+            
+            if processed_text and processed_text.strip():
+                # Step 3: Inject and download
+                st.markdown("### Step 3: Inject and Download")
+                
+                if st.button("✨ Inject Points into Resume"):
+                    with st.spinner('Injecting points...'):
+                        try:
+                            resume_bytes.seek(0)
+                            injector = ResumeInjector()
+                            
+                            # Suppress debug output from resume_injector
+                            import sys
+                            from io import StringIO
+                            
+                            old_stdout = sys.stdout
+                            sys.stdout = StringIO()  # Suppress debug prints
+                            
+                            try:
+                                updated_resume, injections = injector.inject_points_into_resume(
+                                    resume_bytes,
+                                    processed_text
+                                )
+                            finally:
+                                sys.stdout = old_stdout
+                            
+                            st.success("✅ Points injected successfully!")
+                            
+                            # Show summary
+                            st.subheader("Injection Summary")
+                            for heading, count in injections.items():
+                                st.info(f"📌 **{heading}**: {count} points added")
+                            
+                            # Download button
+                            st.download_button(
+                                label="📥 Download Updated Resume",
+                                data=updated_resume.getvalue(),
+                                file_name="Resume_Updated.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key="resume_download"
+                            )
+                            
+                        except ValueError as e:
+                            st.error(f"❌ Format Error: {str(e)}")
+                            st.warning("Debug Info:")
+                            with st.expander("Show debug details"):
+                                st.text(f"Text length: {len(processed_text)} chars")
+                                st.text(f"First 300 chars:\n{processed_text[:300]}")
+                            st.info("Tips:")
+                            st.info("• Text must have bullet points (•, -, *, +)")
+                            st.info("• Use Tab 1 to process text first")
+                            st.info("• Copy entire output from Tab 1")
+                        except Exception as e:
+                            st.error(f"❌ Injection Failed: {str(e)}")
+                            st.warning("Troubleshooting:")
+                            with st.expander("Show debug info"):
+                                st.error(f"**Error:** {type(e).__name__}")
+                                st.text(f"Message: {str(e)}")
+                                st.text(f"Text preview: {processed_text[:200]}")
+                            st.info("Try:")
+                            st.info("1. Process text using Tab 1")
+                            st.info("2. Copy the output (with 'Cycle' labels)")
+                            st.info("3. Paste directly into Tab 3")
+            
+            if not processed_text or not processed_text.strip():
+                st.info("💡 Please provide extracted points text to proceed")
 
 if __name__ == "__main__":
     main()
