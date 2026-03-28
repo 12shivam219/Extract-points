@@ -4,12 +4,48 @@ class TextProcessor:
     def __init__(self):
         # More flexible patterns to handle various formats
         self.bullet_pattern = r'(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\))\s*(.*)'
-        self.heading_pattern = r'^(?!(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\)))[A-Za-z0-9].*$'
+        # Headings: short lines (< 50 chars), no bullets, typically 1-5 words
+        self.heading_pattern = r'^(?!(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\)))[A-Za-z0-9][A-Za-z0-9\s\.\-]*$'
 
     def is_heading(self, line):
-        """Check if a line is a heading."""
+        """Check if a line is a heading.
+        
+        A heading is:
+        - Starts with letter/number (not a bullet)
+        - Is relatively short (< 50 characters)
+        - Has 1-4 words (short phrases)
+        - Doesn't start with action verbs (developed, implemented, built, etc.)
+        """
         line = line.strip()
-        return bool(re.match(self.heading_pattern, line))
+        if not line:
+            return False
+        
+        # Don't match lines starting with bullets
+        if re.match(r'^(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\))', line):
+            return False
+        
+        # Headings should be relatively short
+        if len(line) > 50:
+            return False
+        
+        # Headings typically have few words (1-4 words max)
+        word_count = len(line.split())
+        if word_count > 4:
+            return False
+        
+        # Don't treat action/past-participle starting sentences as headings
+        action_verbs = ['developed', 'implemented', 'built', 'created', 'designed', 
+                        'integrated', 'leveraged', 'collaborated', 'enhanced', 'optimized',
+                        'defined', 'deployed', 'managing', 'utilized', 'established']
+        first_word = line.lower().split()[0]
+        if first_word in action_verbs:
+            return False
+        
+        # Headings typically start with a capital letter or alphanumeric
+        if not re.match(r'^[A-Za-z0-9]', line):
+            return False
+        
+        return True
 
     def is_bullet_point(self, line):
         """Check if a line is a bullet point."""
@@ -23,6 +59,24 @@ class TextProcessor:
             return match.group(1)
         return None
 
+    def has_bullet_symbol(self, line):
+        """Check if a line already has a bullet symbol."""
+        stripped = line.strip()
+        return bool(re.match(r'^(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\))', stripped))
+    
+    def add_bullet_if_missing(self, line):
+        """Add a bullet symbol if the line doesn't have one."""
+        stripped = line.strip()
+        # If it already has a bullet, return as is
+        if self.has_bullet_symbol(line):
+            return line
+        # If it's a bullet-less point, add one
+        if stripped and not self.is_heading(stripped):
+            # Preserve original indentation and add bullet
+            indent = len(line) - len(line.lstrip())
+            return ' ' * indent + '• ' + stripped
+        return line
+
     def process_text(self, text, points_per_cycle):
         """Process the input text and extract points in cycles."""
         if not text or not text.strip():
@@ -31,14 +85,15 @@ class TextProcessor:
         if points_per_cycle < 1:
             raise ValueError("Points per cycle must be at least 1")
 
-        # Split text into lines and process
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        # Split text into lines but preserve original content for bullets
+        lines = text.split('\n')
+        lines = [line for line in lines if line.strip()]  # Keep original whitespace, filter empty lines
         
         if not lines:
             raise ValueError("No valid text content found after splitting")
             
         # Ensure we have at least one heading by setting a default if none is found
-        has_heading = any(self.is_heading(line) for line in lines)
+        has_heading = any(self.is_heading(line.strip()) for line in lines)
         if not has_heading:
             pass  # Will treat first line as heading below
             
@@ -47,25 +102,22 @@ class TextProcessor:
 
         # First pass: organize content
         for i, line in enumerate(lines):
+            line_stripped = line.strip()
             # Skip lines that are only underscores
-            if line.replace('_', '').strip() == '':
+            if line_stripped.replace('_', '').strip() == '':
                 continue
             
             # If no heading is found and this is the first line, treat it as a heading
             if current_heading is None and i == 0 and not has_heading:
-                current_heading = line
+                current_heading = line_stripped
                 structured_content[current_heading] = []
-            elif self.is_heading(line):
-                current_heading = line
+            elif self.is_heading(line_stripped):
+                current_heading = line_stripped
                 structured_content[current_heading] = []
-            elif current_heading is not None:  # If we have a heading, treat any non-heading as a potential bullet point
-                # Check if it's a bullet point
-                if self.is_bullet_point(line):
-                    point = self.extract_bullet_point(line)
-                    if point:
-                        structured_content[current_heading].append(point)
-                else:
-                    # If it's not recognized as a bullet point, add it as a plain point
+            elif current_heading is not None:
+                # Any line after a heading that is not itself a heading is a point
+                # (whether it has a bullet symbol or not)
+                if line_stripped:  # Only add non-empty lines
                     structured_content[current_heading].append(line)
 
         if not structured_content:
@@ -110,10 +162,18 @@ You can use •, -, *, +, or numbers (1. 2.) for bullet points.""")
             
             # Organize points by heading within each cycle
             for heading, points in structured_content.items():
+                # if points:  # Only add heading if there are points
+                #     cycle_content.append(heading)
+                
                 heading_points = points[start_idx:min(end_idx, len(points))]
                 if heading_points:  # Only add points for this cycle
                     for point in heading_points:
-                        cycle_content.append(point)
+                        # Extract point without bullet
+                        extracted = self.extract_bullet_point(point)
+                        if extracted:
+                            cycle_content.append(extracted)
+                        else:
+                            cycle_content.append(point.strip())
 
             result.extend(cycle_content)
             current_cycle += 1
