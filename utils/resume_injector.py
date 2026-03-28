@@ -4,19 +4,13 @@ from docx.oxml.ns import qn
 from copy import deepcopy
 import io
 import re
+from .bookmark_manager import BookmarkManager
 
 class ResumeInjector:
     """Handles injecting extracted points into resume templates with bookmarks."""
     
     def __init__(self):
-        # Map section headings to resume bookmarks
-        self.heading_to_bookmark = {
-            'kpmg': 'KPMG_Responsibilities',
-            'cvs': 'CVS_Responsibilities',
-            'harland': 'Harland_Responsibilities',
-            'first citizen': 'FirstCitizensBank_Responsibilities',
-            'first citizens': 'FirstCitizensBank_Responsibilities',
-        }
+        self.bookmark_manager = BookmarkManager()
     
     def extract_points_by_heading(self, processed_text):
         """
@@ -142,21 +136,17 @@ class ResumeInjector:
         except Exception as e:
             print(f"[DEBUG] Could not copy list formatting: {str(e)}")
     
-    def inject_points_into_resume(self, resume_bytes, processed_text):
+    def inject_points_into_resume(self, resume_bytes, processed_text, custom_mapping=None):
         """
-        Inject extracted points into resume at bookmarks by cycle order.
-        Maps cycles to companies in order:
-        - Cycle 1 → KPMG (1st company)
-        - Cycle 2 → CVS (2nd company)
-        - Cycle 3 → Harland (3rd company)
-        - Cycle 4 → First Citizens Bank (4th company)
+        Inject extracted points into resume at bookmarks with flexible mapping.
         
         Args:
             resume_bytes: BytesIO object of the resume template
             processed_text: Processed text organized by cycles
+            custom_mapping: Dict of {cycle_num: bookmark_name}. If None, auto-generates.
             
         Returns:
-            BytesIO object with updated resume, injection details
+            Tuple of (BytesIO with updated resume, injection_details dict)
         """
         try:
             doc = Document(resume_bytes)
@@ -165,29 +155,32 @@ class ResumeInjector:
             if not all_points:
                 raise ValueError("No points found in processed text. Check the format.")
             
-            # Get all available bookmarks in the resume
-            available_bookmarks = self.get_available_bookmarks(resume_bytes)
+            # Auto-detect all bookmarks in the resume
+            available_bookmarks = self.bookmark_manager.detect_bookmarks(resume_bytes)
             
             if not available_bookmarks:
                 raise ValueError("No bookmarks found in resume template. Please add bookmarks first.")
             
-            # Map cycles to bookmarks in order
-            cycle_to_bookmark = {}
-            sorted_bookmarks = sorted(available_bookmarks)  # Ensure consistent order
+            # Generate or use provided mapping
+            if custom_mapping:
+                cycle_to_bookmark = custom_mapping
+                # Validate the custom mapping
+                is_valid, error_msg = self.bookmark_manager.validate_mapping(
+                    cycle_to_bookmark, available_bookmarks
+                )
+                if not is_valid:
+                    raise ValueError(f"Invalid mapping: {error_msg}")
+            else:
+                # Auto-suggest mapping based on patterns and position
+                num_cycles = len(points_by_cycle)
+                cycle_to_bookmark = self.bookmark_manager.suggest_mappings(
+                    available_bookmarks, num_cycles
+                )
             
-            # Company order mapping
-            company_order = [
-                'KPMG_Responsibilities',
-                'CVS_Responsibilities',
-                'Harland_Responsibilities',
-                'FirstCitizensBank_Responsibilities'
-            ]
+            if not cycle_to_bookmark:
+                raise ValueError("Could not generate bookmark mappings. Please provide custom mapping.")
             
-            # Use predefined order if available
-            for idx, company in enumerate(company_order):
-                if company in available_bookmarks:
-                    cycle_to_bookmark[idx + 1] = company  # Cycle 1, 2, 3, 4...
-            
+            print(f"[DEBUG] Available bookmarks: {available_bookmarks}")
             print(f"[DEBUG] Cycle to bookmark mapping: {cycle_to_bookmark}")
             print(f"[DEBUG] Points by cycle: {points_by_cycle}")
             
@@ -197,7 +190,7 @@ class ResumeInjector:
             # Inject points for each cycle into its corresponding bookmark
             for cycle_num in sorted(points_by_cycle.keys()):
                 if cycle_num not in cycle_to_bookmark:
-                    print(f"[DEBUG] Warning: Cycle {cycle_num} has no corresponding company bookmark")
+                    print(f"[DEBUG] Warning: Cycle {cycle_num} has no corresponding bookmark")
                     continue
                 
                 bookmark_name = cycle_to_bookmark[cycle_num]
@@ -318,50 +311,5 @@ class ResumeInjector:
             raise Exception(f"Error injecting points into resume: {str(e)}")
     
     def get_available_bookmarks(self, resume_bytes):
-        """Get list of available bookmarks in resume template."""
-        try:
-            doc = Document(resume_bytes)
-            bookmarks = set()
-            
-            # Method 1: Check paragraph XML
-            for para in doc.paragraphs:
-                if para._element.xml:
-                    # Look for bookmarkStart elements
-                    matches = re.findall(r'w:name="([^"]*)"', para._element.xml)
-                    bookmarks.update(matches)
-            
-            # Method 2: Check in all runs
-            for para in doc.paragraphs:
-                for run in para.runs:
-                    if run._element.xml:
-                        matches = re.findall(r'w:name="([^"]*)"', run._element.xml)
-                        bookmarks.update(matches)
-            
-            # Method 3: Deep search in all elements
-            from docx.oxml import parse_xml
-            for element in doc.element.iter():
-                tag = element.tag
-                if 'bookmark' in tag.lower():
-                    name = element.get(qn('w:name'))
-                    if name:
-                        bookmarks.add(name)
-            
-            # If no bookmarks found, return default ones for this template
-            if not bookmarks:
-                # Default bookmarks for the Lead Engineer template
-                bookmarks = {
-                    'KPMG_Responsibilities',
-                    'CVS_Responsibilities', 
-                    'Harland_Responsibilities',
-                    'FirstCitizensBank_Responsibilities'
-                }
-            
-            return list(bookmarks)
-        except Exception as e:
-            # Return default bookmarks if detection fails
-            return [
-                'KPMG_Responsibilities',
-                'CVS_Responsibilities',
-                'Harland_Responsibilities', 
-                'FirstCitizensBank_Responsibilities'
-            ]
+        """Get list of available bookmarks in resume template (delegated to BookmarkManager)."""
+        return self.bookmark_manager.detect_bookmarks(resume_bytes)

@@ -110,8 +110,37 @@ def interactive_bookmark_creation():
     
     # Confirm before adding
     print("\n" + "="*60)
+    print("BOOKMARK PLACEMENT OPTIONS")
+    print("="*60)
+    print("""
+1. 🏷️  AT HEADER (Responsibilities:)
+   - Injects right after "Responsibilities:" line
+   - New points appear first in the section
+
+2. 📍 AT END OF SECTION
+   - Injects after all existing bullet points
+   - New points appear at the end (recommended)
+   ✨ RECOMMENDED for appending new points to existing ones
+
+3. ❌ CANCEL """)
+    
+    placement = input("\nChoose placement (1, 2, or 3): ").strip()
+    
+    if placement == '3':
+        print("❌ Cancelled. No changes made.")
+        return
+    elif placement not in ['1', '2']:
+        print("❌ Invalid choice")
+        return
+    
+    print("\n" + "="*60)
     print("SUMMARY - Bookmarks to Add:")
     print("="*60)
+    
+    placement_type = "AT HEADER" if placement == '1' else "AT END OF SECTION"
+    print(f"Placement: {placement_type}")
+    print()
+    
     for bookmark in bookmarks_to_add:
         print(f"✓ '{bookmark['name']}' at {bookmark['company']}")
     
@@ -122,10 +151,38 @@ def interactive_bookmark_creation():
         return
     
     # Add bookmarks
-    for bookmark in bookmarks_to_add:
+    for idx, section in enumerate(responsibility_sections):
+        bookmark = bookmarks_to_add[idx]
+        
         try:
-            add_bookmark_to_paragraph(bookmark['para'], bookmark['name'])
-            print(f"✅ Added bookmark: {bookmark['name']}")
+            if placement == '1':
+                # Add at header
+                add_bookmark_to_paragraph(section['para_object'], bookmark['name'])
+                print(f"✅ Added bookmark at header: {bookmark['name']}")
+            else:
+                # Find last bullet point in this section and add after it
+                responsibility_idx = section['responsibility_header_para']
+                
+                # Find the last non-empty paragraph in this section
+                last_point_idx = responsibility_idx
+                for j in range(responsibility_idx + 1, len(doc.paragraphs)):
+                    next_para = doc.paragraphs[j]
+                    text = next_para.text.strip()
+                    
+                    # Stop if we hit a new section (company name, "Accountabilities:", etc)
+                    if (text.startswith('Sr.') or text.startswith('Lead') or 
+                        text.startswith('Senior') or 'Client' in text or
+                        text.endswith('LLC') or text.endswith('Inc') or
+                        text.endswith('Group') or text == 'Accountabilities:'):
+                        break
+                    
+                    if text:  # Non-empty paragraph
+                        last_point_idx = j
+                
+                # Add bookmark at end of section
+                add_bookmark_to_paragraph(doc.paragraphs[last_point_idx], bookmark['name'])
+                print(f"✅ Added bookmark at end of section: {bookmark['name']}")
+        
         except Exception as e:
             print(f"❌ Error adding bookmark '{bookmark['name']}': {e}")
     
@@ -136,6 +193,13 @@ def interactive_bookmark_creation():
         doc.save(output_path)
         print(f"\n✅ Successfully saved resume with bookmarks!")
         print(f"   Output: {output_path}")
+        print(f"\n💡 Placement details:")
+        if placement == '1':
+            print("   Bookmarks placed at 'Responsibilities:' headers")
+            print("   New points will appear immediately after headers")
+        else:
+            print("   Bookmarks placed at end of each section")
+            print("   New points will appear after all existing points (recommended)")
         print(f"\n💡 Tip: Use this file as your template for Resume Injection.")
     except Exception as e:
         print(f"❌ Error saving file: {e}")
