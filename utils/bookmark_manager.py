@@ -32,11 +32,12 @@ class BookmarkManager:
     def detect_bookmarks(self, resume_bytes) -> List[str]:
         """
         Auto-detect all bookmarks in a document.
-        Returns list of bookmark names in order found.
+        Returns list of bookmark names in order found (preserving duplicates with suffixes).
         """
         try:
             doc = Document(resume_bytes)
             bookmarks = []
+            bookmark_count = {}
             
             for element in doc.element.iter():
                 tag = element.tag
@@ -44,10 +45,16 @@ class BookmarkManager:
                     if hasattr(element, 'attrib'):
                         for attr_name, attr_val in element.attrib.items():
                             if 'name' in attr_name.lower():
-                                if attr_val not in bookmarks:
+                                # Handle duplicates by adding a suffix
+                                if attr_val in bookmark_count:
+                                    bookmark_count[attr_val] += 1
+                                    unique_name = f"{attr_val}_{bookmark_count[attr_val]}"
+                                    bookmarks.append(unique_name)
+                                else:
+                                    bookmark_count[attr_val] = 0
                                     bookmarks.append(attr_val)
             
-            return sorted(bookmarks)  # Sort for consistency
+            return bookmarks  # Preserve insertion order from document
         except Exception as e:
             print(f"Error detecting bookmarks: {e}")
             return []
@@ -63,8 +70,8 @@ class BookmarkManager:
         for pattern_type, keywords in self.PATTERN_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in bookmark_lower:
-                    # Higher confidence for exact substring matches
-                    confidence = len(keyword) / len(bookmark_lower)
+                    # Calculate confidence as proportion of keyword in bookmark
+                    confidence = min(len(keyword) / len(bookmark_lower), 1.0)
                     if confidence > best_match[1]:
                         best_match = (pattern_type, confidence)
         
@@ -156,8 +163,15 @@ class BookmarkManager:
             if filepath.exists():
                 with open(filepath, 'r') as f:
                     data = json.load(f)
-                # Convert string keys back to int for mapping
-                data['mapping'] = {int(k): v for k, v in data['mapping'].items()}
+                # Convert string keys back to int for mapping (with validation)
+                mapping = {}
+                for k, v in data.get('mapping', {}).items():
+                    try:
+                        mapping[int(k)] = v
+                    except (ValueError, TypeError):
+                        print(f"Warning: Skipping invalid cycle key '{k}' in profile")
+                        continue
+                data['mapping'] = mapping
                 return data
         except Exception as e:
             print(f"Error loading profile: {e}")
@@ -175,14 +189,19 @@ class BookmarkManager:
         try:
             if self.PROFILES_DIR.exists():
                 for filepath in self.PROFILES_DIR.glob('*.json'):
-                    with open(filepath, 'r') as f:
-                        data = json.load(f)
-                        profiles.append({
-                            'name': data.get('profile_name'),
-                            'resume_name': data.get('resume_name', 'Unknown'),
-                            'filename': filepath.name,
-                            'bookmarks_count': len(data.get('bookmarks', [])),
-                        })
+                    try:
+                        with open(filepath, 'r') as f:
+                            data = json.load(f)
+                            profiles.append({
+                                'name': data.get('profile_name'),
+                                'resume_name': data.get('resume_name', 'Unknown'),
+                                'filename': filepath.name,
+                                'bookmarks_count': len(data.get('bookmarks', [])),
+                            })
+                    except Exception as e:
+                        # Skip corrupted files but continue with others
+                        print(f"Warning: Skipping corrupted profile {filepath.name}: {e}")
+                        continue
         except Exception as e:
             print(f"Error listing profiles: {e}")
         

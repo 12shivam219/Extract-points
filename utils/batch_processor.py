@@ -1,6 +1,7 @@
 
 import io
 from typing import List, Dict, Tuple
+from pathlib import Path
 from .text_processor import TextProcessor
 from .export_handler import ExportHandler
 
@@ -15,6 +16,7 @@ class BatchProcessor:
         
         Returns:
             List of dictionaries mapping filename to (text_content, docx_bytes, pdf_bytes)
+            For errors: (error_message_string, None, None)
         """
         results = []
         
@@ -22,7 +24,8 @@ class BatchProcessor:
             try:
                 # Read the file content
                 content = uploaded_file.read().decode('utf-8')
-                filename = uploaded_file.name.split('.')[0]  # Get filename without extension
+                # Use pathlib for robust filename handling
+                filename = Path(uploaded_file.name).stem
                 
                 # Process the text
                 processed_text = self.text_processor.process_text(content, points_per_heading)
@@ -41,13 +44,10 @@ class BatchProcessor:
                 })
                 
             except Exception as e:
-                # Handle errors for individual files
+                # Handle errors for individual files - return error message as string
+                error_msg = f"Error processing {uploaded_file.name}: {str(e)}"
                 results.append({
-                    uploaded_file.name: (
-                        f"Error processing {uploaded_file.name}: {str(e)}",
-                        None,
-                        None
-                    )
+                    Path(uploaded_file.name).stem: (error_msg, None, None)
                 })
                 
         return results

@@ -28,17 +28,22 @@ class TextProcessor:
         if len(line) > 50:
             return False
         
-        # Headings typically have few words (1-4 words max)
+        # Headings typically have few words (up to 6 words max for reasonable heading length)
         word_count = len(line.split())
-        if word_count > 4:
+        if word_count > 6:
             return False
         
         # Don't treat action/past-participle starting sentences as headings
-        action_verbs = ['developed', 'implemented', 'built', 'created', 'designed', 
-                        'integrated', 'leveraged', 'collaborated', 'enhanced', 'optimized',
-                        'defined', 'deployed', 'managing', 'utilized', 'established']
+        action_verbs = ['developed', 'implementing', 'implemented', 'built', 'building', 
+                        'created', 'designing', 'designed', 'integrated', 'integrating',
+                        'leveraged', 'collaborating', 'collaborated', 'enhanced', 'enhancing',
+                        'optimized', 'optimizing', 'defined', 'defining', 'deployed', 'deploying',
+                        'managing', 'utilized', 'utilizing', 'established', 'establishing',
+                        'managed', 'developing', 'creating', 'leading', 'led', 'driving']
         first_word = line.lower().split()[0]
-        if first_word in action_verbs:
+        # Remove punctuation from first word for comparison
+        first_word_clean = first_word.rstrip('.,;:!?')
+        if first_word_clean in action_verbs:
             return False
         
         # Headings typically start with a capital letter or alphanumeric
@@ -87,7 +92,8 @@ class TextProcessor:
 
         # Split text into lines but preserve original content for bullets
         lines = text.split('\n')
-        lines = [line for line in lines if line.strip()]  # Keep original whitespace, filter empty lines
+        # Don't remove blank lines - they're structural! Just filter completely empty after stripping
+        lines = [line for line in lines if line.strip() or line == '']
         
         if not lines:
             raise ValueError("No valid text content found after splitting")

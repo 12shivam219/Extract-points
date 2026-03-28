@@ -4,7 +4,12 @@ from docx.oxml.ns import qn
 from copy import deepcopy
 import io
 import re
+import logging
 from .bookmark_manager import BookmarkManager
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class ResumeInjector:
     """Handles injecting extracted points into resume templates with bookmarks."""
@@ -28,7 +33,7 @@ class ResumeInjector:
         
         lines = processed_text.split('\n')
         
-        print(f"\n[DEBUG] Total lines: {len(lines)}")
+        logger.debug(f"Total lines: {len(lines)}")
         
         for line in lines:
             line = line.strip()
@@ -39,7 +44,7 @@ class ResumeInjector:
             cycle_match = re.match(r'Cycle\s+(\d+):', line, re.IGNORECASE)
             if cycle_match:
                 current_cycle = int(cycle_match.group(1))
-                print(f"[DEBUG] Found Cycle {current_cycle}")
+                logger.debug(f"Found Cycle {current_cycle}")
                 if current_cycle not in points_by_cycle:
                     points_by_cycle[current_cycle] = []
                 continue
@@ -50,28 +55,28 @@ class ResumeInjector:
             # Check for various bullet formats
             if line.startswith('•'):
                 point_text = re.sub(r'^•\s*', '', line).strip()
-                print(f"[DEBUG] Found bullet point (•) in Cycle {current_cycle}: '{point_text}'")
+                logger.debug(f"Found bullet point (•) in Cycle {current_cycle}: '{point_text}'")
             
             elif line.startswith('-') and not line.startswith('--'):
                 point_text = re.sub(r'^-\s*', '', line).strip()
-                print(f"[DEBUG] Found dash point (-) in Cycle {current_cycle}: '{point_text}'")
+                logger.debug(f"Found dash point (-) in Cycle {current_cycle}: '{point_text}'")
             
             elif line.startswith('*') and not line.startswith('**'):
                 point_text = re.sub(r'^\*\s*', '', line).strip()
-                print(f"[DEBUG] Found asterisk point (*) in Cycle {current_cycle}: '{point_text}'")
+                logger.debug(f"Found asterisk point (*) in Cycle {current_cycle}: '{point_text}'")
             
             elif line.startswith('+'):
                 point_text = re.sub(r'^\+\s*', '', line).strip()
-                print(f"[DEBUG] Found plus point (+) in Cycle {current_cycle}: '{point_text}'")
+                logger.debug(f"Found plus point (+) in Cycle {current_cycle}: '{point_text}'")
             
             elif re.match(r'^\d+\.', line):
                 point_text = re.sub(r'^\d+\.\s*', '', line).strip()
-                print(f"[DEBUG] Found numbered point in Cycle {current_cycle}: '{point_text}'")
+                logger.debug(f"Found numbered point in Cycle {current_cycle}: '{point_text}'")
             
-            # Fallback: If line is long (30+ chars) and meaningful, treat as point
-            elif len(line) >= 30 and not line.startswith('=') and not line.startswith('_') and not line.startswith('Cycle'):
+            # Fallback: If line is long (30+ chars) and meaningful, treat as point (only if in cycle)
+            elif current_cycle is not None and len(line) >= 30 and not line.startswith(('=', '_', '-', 'Cycle')):
                 point_text = line
-                print(f"[DEBUG] Found potential point (no bullet, long line) in Cycle {current_cycle}: '{line[:50]}...'")
+                logger.debug(f"Found potential point (no bullet, long line) in Cycle {current_cycle}: '{line[:50]}...'")
             
             # Add point if found
             if point_text:
@@ -79,8 +84,8 @@ class ResumeInjector:
                 if current_cycle is not None:
                     points_by_cycle[current_cycle].append(point_text)
         
-        print(f"[DEBUG] Total points found: {len(all_points)}")
-        print(f"[DEBUG] Points by cycle: {[(cycle, len(points)) for cycle, points in sorted(points_by_cycle.items())]}")
+        logger.debug(f"Total points found: {len(all_points)}")
+        logger.debug(f"Points by cycle: {[(cycle, len(points)) for cycle, points in sorted(points_by_cycle.items())]}")
         
         return points_by_cycle, all_points
     
@@ -129,12 +134,12 @@ class ResumeInjector:
                 # Copy the numPr element
                 new_numPr = deepcopy(source_numPr)
                 target_pPr.append(new_numPr)
-                print(f"[DEBUG] Successfully copied list formatting (numPr) to new paragraph")
+                logger.debug("Successfully copied list formatting (numPr) to new paragraph")
             else:
-                print(f"[DEBUG] Source paragraph has no list formatting (numPr) to copy")
+                logger.debug("Source paragraph has no list formatting (numPr) to copy")
                 
         except Exception as e:
-            print(f"[DEBUG] Could not copy list formatting: {str(e)}")
+            logger.debug(f"Could not copy list formatting: {str(e)}")
     
     def inject_points_into_resume(self, resume_bytes, processed_text, custom_mapping=None):
         """
@@ -154,6 +159,11 @@ class ResumeInjector:
             
             if not all_points:
                 raise ValueError("No points found in processed text. Check the format.")
+            
+            # Validate that we have actual points, not just empty cycles
+            non_empty_cycles = {c: p for c, p in points_by_cycle.items() if p}
+            if not non_empty_cycles:
+                raise ValueError("No actual points found in any cycles. Cycles are empty.")
             
             # Auto-detect all bookmarks in the resume
             available_bookmarks = self.bookmark_manager.detect_bookmarks(resume_bytes)
@@ -180,9 +190,9 @@ class ResumeInjector:
             if not cycle_to_bookmark:
                 raise ValueError("Could not generate bookmark mappings. Please provide custom mapping.")
             
-            print(f"[DEBUG] Available bookmarks: {available_bookmarks}")
-            print(f"[DEBUG] Cycle to bookmark mapping: {cycle_to_bookmark}")
-            print(f"[DEBUG] Points by cycle: {points_by_cycle}")
+            logger.debug(f"Available bookmarks: {available_bookmarks}")
+            logger.debug(f"Cycle to bookmark mapping: {cycle_to_bookmark}")
+            logger.debug(f"Points by cycle: {points_by_cycle}")
             
             # Track injections for feedback
             injections = {}
@@ -190,17 +200,17 @@ class ResumeInjector:
             # Inject points for each cycle into its corresponding bookmark
             for cycle_num in sorted(points_by_cycle.keys()):
                 if cycle_num not in cycle_to_bookmark:
-                    print(f"[DEBUG] Warning: Cycle {cycle_num} has no corresponding bookmark")
+                    logger.debug(f"Warning: Cycle {cycle_num} has no corresponding bookmark")
                     continue
                 
                 bookmark_name = cycle_to_bookmark[cycle_num]
                 cycle_points = points_by_cycle[cycle_num]
                 
                 if not cycle_points:
-                    print(f"[DEBUG] Cycle {cycle_num} has no points to inject")
+                    logger.debug(f"Cycle {cycle_num} has no points to inject")
                     continue
                 
-                print(f"[DEBUG] Injecting Cycle {cycle_num} points into {bookmark_name}")
+                logger.debug(f"Injecting Cycle {cycle_num} points into {bookmark_name}")
                 
                 bookmark_para = self.find_bookmark_paragraph(doc, bookmark_name)
                 
@@ -212,7 +222,7 @@ class ResumeInjector:
                         if 'Responsibilities' in para.text and company_section_name in para.text:
                             bookmark_para = doc.paragraphs[para_idx + 1] if para_idx + 1 < len(doc.paragraphs) else para
                             found = True
-                            print(f"[DEBUG] Found {company_section_name} section at paragraph {para_idx}")
+                            logger.debug(f"Found {company_section_name} section at paragraph {para_idx}")
                             break
                     
                     if not found:
@@ -229,19 +239,24 @@ class ResumeInjector:
                     # Get the parent element and insertion point
                     parent = reference_para._element.getparent()
                     ref_index = None
+                    
+                    # Try multiple strategies to find the reference index
                     try:
                         ref_index = list(parent).index(reference_para._element)
                     except ValueError:
-                        # If not found in parent, it might be in a different structure
-                        # Find the closest preceding paragraph
+                        pass
+                    
+                    # Fallback: find by matching element in paragraph list
+                    if ref_index is None:
                         for idx, para in enumerate(doc.paragraphs):
                             if para._element == reference_para._element:
                                 ref_index = idx
                                 break
                     
+                    # Last resort: use the end of the parent
                     if ref_index is None:
-                        print(f"[DEBUG] Warning: Could not find reference paragraph, appending to end")
-                        ref_index = len(list(parent)) - 1
+                        logger.warning("Could not find reference paragraph index, appending to end")
+                        ref_index = max(0, len(list(parent)) - 1)
                     
                     # Add points for this cycle
                     for i, point_text in enumerate(cycle_points):
@@ -291,11 +306,11 @@ class ResumeInjector:
                             ref_index = list(parent).index(reference_para._element)
                             parent.insert(ref_index + 1 + i, new_para._element)
                         except (ValueError, IndexError) as e:
-                            print(f"[DEBUG] Warning: Could not insert at position, appending instead: {str(e)}")
+                            logger.warning(f"Could not insert at position, appending instead: {str(e)}")
                             parent.append(new_para._element)
                     
                     injections[bookmark_name] = len(cycle_points)
-                    print(f"[DEBUG] Successfully injected {len(cycle_points)} points into {bookmark_name}")
+                    logger.debug(f"Successfully injected {len(cycle_points)} points into {bookmark_name}")
             
             if not injections:
                 raise ValueError("Failed to inject points. No valid insertion points found.")
