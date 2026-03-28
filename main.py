@@ -6,6 +6,7 @@ from utils.resume_injector import ResumeInjector
 import io
 import zipfile
 import pandas as pd
+import pandas as pd
 
 def main():
     st.set_page_config(
@@ -24,6 +25,10 @@ def main():
         st.session_state.processed_text = None
     if 'batch_results' not in st.session_state:
         st.session_state.batch_results = None
+    if 'tab3_detected_bookmarks' not in st.session_state:
+        st.session_state.tab3_detected_bookmarks = []
+    if 'tab3_custom_mapping' not in st.session_state:
+        st.session_state.tab3_custom_mapping = {}
 
     # Create tabs for single and batch processing
     tab1, tab2, tab3 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection"])
@@ -293,6 +298,7 @@ Heading 2
             key="resume_upload"
         )
         
+        # Initialize variables to avoid scope issues
         detected_bookmarks = []
         resume_bytes = None
         
@@ -416,11 +422,13 @@ Heading 2
                     for cycle_num in range(1, num_cycles + 1):
                         col = cols[(cycle_num - 1) % len(cols)]
                         with col:
+                            # Safe index calculation to avoid out-of-bounds error
+                            suggested_bm = suggested_mapping.get(cycle_num, detected_bookmarks[0] if detected_bookmarks else "")
+                            bm_index = detected_bookmarks.index(suggested_bm) if suggested_bm in detected_bookmarks else 0
                             selected_bookmark = st.selectbox(
                                 f"Cycle {cycle_num}",
                                 detected_bookmarks,
-                                index=detected_bookmarks.index(suggested_mapping.get(cycle_num, detected_bookmarks[0]))
-                                if suggested_mapping.get(cycle_num) in detected_bookmarks else 0,
+                                index=bm_index,
                                 key=f"cycle_{cycle_num}_mapping"
                             )
                             custom_mapping[cycle_num] = selected_bookmark
@@ -451,7 +459,7 @@ Heading 2
                     
                     # Display as table
                     preview_df = pd.DataFrame(preview_rows)
-                    st.dataframe(preview_df, use_container_width=True)
+                    st.dataframe(preview_df, width='stretch')
                     
                     # Mismatch handling options
                     if has_mismatch and num_cycles < len(detected_bookmarks):
