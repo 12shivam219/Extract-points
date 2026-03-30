@@ -87,8 +87,8 @@ class TextProcessor:
         if not text or not text.strip():
             raise ValueError("Input text cannot be empty")
 
-        if points_per_cycle < 1:
-            raise ValueError("Points per cycle must be at least 1")
+        if not isinstance(points_per_cycle, int) or points_per_cycle < 1:
+            raise ValueError("Points per cycle must be a positive integer")
 
         # Split text into lines but preserve original content for bullets
         lines = text.split('\n')

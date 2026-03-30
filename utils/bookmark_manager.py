@@ -6,10 +6,14 @@ Handles detection, mapping, and profile management for flexible resume injection
 
 import json
 import os
+import logging
 from pathlib import Path
 from docx import Document
 from typing import Dict, List, Tuple
 import re
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 class BookmarkManager:
@@ -56,12 +60,12 @@ class BookmarkManager:
             
             return bookmarks  # Preserve insertion order from document
         except Exception as e:
-            print(f"Error detecting bookmarks: {e}")
+            logger.error(f"Error detecting bookmarks: {e}")
             return []
     
     def match_pattern(self, bookmark_name: str) -> Tuple[str, float]:
         """
-        Pattern match a bookmark name to determine its type.
+        Pattern match a bookmark name to determine its type with improved accuracy.
         Returns: (pattern_type, confidence_score)
         """
         bookmark_lower = bookmark_name.lower()
@@ -70,8 +74,21 @@ class BookmarkManager:
         for pattern_type, keywords in self.PATTERN_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in bookmark_lower:
-                    # Calculate confidence as proportion of keyword in bookmark
-                    confidence = min(len(keyword) / len(bookmark_lower), 1.0)
+                    # Calculate confidence based on:
+                    # 1. How much keyword represents of the bookmark (normalized)
+                    # 2. Whether it's at start, middle, or end (word boundaries preferred)
+                    keyword_ratio = len(keyword) / len(bookmark_lower)
+                    
+                    # Check if keyword is at word boundary (underscore or start)
+                    word_boundary_bonus = 0
+                    if bookmark_lower.startswith(keyword):
+                        word_boundary_bonus = 0.15
+                    elif f'_{keyword}' in bookmark_lower or f'-{keyword}' in bookmark_lower:
+                        word_boundary_bonus = 0.10
+                    
+                    # Confidence = keyword prominence + word boundary bonus
+                    confidence = min((keyword_ratio * 0.8) + (word_boundary_bonus), 1.0)
+                    
                     if confidence > best_match[1]:
                         best_match = (pattern_type, confidence)
         
@@ -142,15 +159,15 @@ class BookmarkManager:
             with open(filepath, 'w') as f:
                 json.dump(profile_data, f, indent=2)
             
-            print(f"✓ Profile saved: {profile_name}")
+            logger.info(f"Profile saved: {profile_name}")
             return True
         except Exception as e:
-            print(f"✗ Error saving profile: {e}")
+            logger.error(f"Error saving profile: {e}")
             return False
     
     def load_profile(self, profile_name: str) -> Dict:
         """
-        Load a saved bookmark profile.
+        Load a saved bookmark profile with robust key conversion.
         
         Returns:
             Dict with keys: 'bookmarks', 'mapping', 'resume_name'
@@ -165,16 +182,25 @@ class BookmarkManager:
                     data = json.load(f)
                 # Convert string keys back to int for mapping (with validation)
                 mapping = {}
+                invalid_keys = []
                 for k, v in data.get('mapping', {}).items():
                     try:
-                        mapping[int(k)] = v
+                        cycle_num = int(k)
+                        if cycle_num < 1:
+                            invalid_keys.append(k)
+                            continue
+                        mapping[cycle_num] = v
                     except (ValueError, TypeError):
-                        print(f"Warning: Skipping invalid cycle key '{k}' in profile")
+                        invalid_keys.append(k)
                         continue
+                
+                if invalid_keys:
+                    logger.warning(f"Skipped {len(invalid_keys)} invalid cycle keys in profile: {invalid_keys}")
+                
                 data['mapping'] = mapping
                 return data
         except Exception as e:
-            print(f"Error loading profile: {e}")
+            logger.error(f"Error loading profile: {e}")
         
         return {}
     
@@ -200,10 +226,10 @@ class BookmarkManager:
                             })
                     except Exception as e:
                         # Skip corrupted files but continue with others
-                        print(f"Warning: Skipping corrupted profile {filepath.name}: {e}")
+                        logger.warning(f"Skipping corrupted profile {filepath.name}: {e}")
                         continue
         except Exception as e:
-            print(f"Error listing profiles: {e}")
+            logger.error(f"Error listing profiles: {e}")
         
         return profiles
     
@@ -215,10 +241,10 @@ class BookmarkManager:
             
             if filepath.exists():
                 filepath.unlink()
-                print(f"✓ Profile deleted: {profile_name}")
+                logger.info(f"Profile deleted: {profile_name}")
                 return True
         except Exception as e:
-            print(f"Error deleting profile: {e}")
+            logger.error(f"Error deleting profile: {e}")
         
         return False
     

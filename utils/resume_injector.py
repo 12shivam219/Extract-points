@@ -116,7 +116,7 @@ class ResumeInjector:
     def copy_list_formatting(self, source_para, target_para):
         """
         Copy list/bullet formatting from source paragraph to target paragraph.
-        This ensures bullets are properly applied.
+        This ensures bullets are properly applied. Includes fallback formatting.
         """
         try:
             source_pPr = source_para._element.get_or_add_pPr()
@@ -126,20 +126,43 @@ class ResumeInjector:
             source_numPr = source_pPr.find(qn('w:numPr'))
             
             if source_numPr is not None:
-                # Deep copy the numbering properties
-                target_numPr = target_pPr.find(qn('w:numPr'))
-                if target_numPr is not None:
-                    target_pPr.remove(target_numPr)
-                
-                # Copy the numPr element
-                new_numPr = deepcopy(source_numPr)
-                target_pPr.append(new_numPr)
-                logger.debug("Successfully copied list formatting (numPr) to new paragraph")
+                try:
+                    # Deep copy the numbering properties
+                    target_numPr = target_pPr.find(qn('w:numPr'))
+                    if target_numPr is not None:
+                        target_pPr.remove(target_numPr)
+                    
+                    # Copy the numPr element
+                    new_numPr = deepcopy(source_numPr)
+                    target_pPr.append(new_numPr)
+                    logger.debug("Successfully copied list formatting (numPr) to new paragraph")
+                except Exception as copy_error:
+                    # Fallback: add manual bullet prefix if numPr copy fails
+                    logger.debug(f"NumPr copy failed, applying fallback formatting: {str(copy_error)}")
+                    self._apply_fallback_bullet_formatting(target_para)
             else:
                 logger.debug("Source paragraph has no list formatting (numPr) to copy")
                 
         except Exception as e:
-            logger.debug(f"Could not copy list formatting: {str(e)}")
+            logger.warning(f"Could not copy list formatting, will apply fallback: {str(e)}")
+            try:
+                self._apply_fallback_bullet_formatting(target_para)
+            except Exception as fallback_error:
+                logger.debug(f"Fallback formatting also failed: {str(fallback_error)}")
+    
+    def _apply_fallback_bullet_formatting(self, para):
+        """
+        Apply fallback bullet formatting when XML manipulation fails.
+        Prepends bullet character to paragraph text.
+        """
+        try:
+            if para.runs:
+                first_run = para.runs[0]
+                if first_run.text and not first_run.text.startswith('•'):
+                    first_run.text = '• ' + first_run.text
+                    logger.debug("Applied fallback bullet prefix to paragraph")
+        except Exception as e:
+            logger.debug(f"Could not apply fallback bullet formatting: {str(e)}")
     
     def inject_points_into_resume(self, resume_bytes, processed_text, custom_mapping=None):
         """
@@ -154,7 +177,14 @@ class ResumeInjector:
             Tuple of (BytesIO with updated resume, injection_details dict)
         """
         try:
-            doc = Document(resume_bytes)
+            try:
+                doc = Document(resume_bytes)
+            except Exception as e:
+                raise ValueError(f"Invalid or corrupted DOCX file: {str(e)}. Please check the resume template.")
+            
+            # Reset stream position for potential re-reads
+            resume_bytes.seek(0)
+            
             points_by_cycle, all_points = self.extract_points_by_heading(processed_text)
             
             if not all_points:

@@ -5,6 +5,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT
+import re
 
 class ExportHandler:
     def __init__(self):
@@ -28,6 +29,15 @@ class ExportHandler:
             spaceAfter=6,
             leading=14
         ))
+    
+    def _sanitize_for_xml(self, text: str) -> str:
+        """Remove or escape XML-invalid characters for reportlab compatibility."""
+        if not text:
+            return text
+        # Remove control characters that can break reportlab PDF generation
+        # Keep only printable characters and common whitespace
+        text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+        return text
 
     def generate_docx(self, content):
         """Generate a DOCX file from the processed text."""
@@ -40,6 +50,9 @@ class ExportHandler:
             line = line.strip()
             if not line:
                 continue
+
+            # Sanitize line for compatibility
+            line = self._sanitize_for_xml(line)
 
             # Add headings and regular content
             if line.startswith('Cycle'):
@@ -76,6 +89,9 @@ class ExportHandler:
                 story.append(Spacer(1, 0.1 * inch))
                 continue
 
+            # Sanitize line for XML compatibility
+            line = self._sanitize_for_xml(line)
+            
             # Determine line type and formatting
             if line.startswith('Cycle'):
                 story.append(Paragraph(line, self.styles['CycleHeading']))
