@@ -139,7 +139,7 @@ Heading 3
                 st.session_state.settings.set('points_per_cycle', points_per_heading)
 
         with col2:
-            process_button = st.button("🔄 Process Text", width='stretch')
+            process_button = st.button("🔄 Process Text", use_container_width=True)
         
         with col3:
             dedup_enabled = st.checkbox("🔍 Remove Duplicates", value=st.session_state.settings.get('deduplication_enabled', False))
@@ -305,7 +305,7 @@ Heading 2
             with col2:
                 batch_dedup = st.checkbox("🔍 Remove Duplicates", value=st.session_state.settings.get('deduplication_enabled', False), key="batch_paste_dedup")
             
-            if st.button("🔄 Process Texts", width='stretch', key="batch_paste_button"):
+            if st.button("🔄 Process Texts", use_container_width=True, key="batch_paste_button"):
                 if batch_paste_text.strip():
                     with st.spinner('Processing texts...'):
                         try:
@@ -361,7 +361,7 @@ Heading 2
                                                             file_name=f"{filename}.docx",
                                                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                             key=f"{filename}_docx",
-                                                            width='stretch'
+                                                            use_container_width=True
                                                         )
                                                 with col2:
                                                     if pdf:
@@ -443,7 +443,7 @@ Heading 2
 
                     batch_dedup = st.checkbox("🔍 Remove Duplicates", value=st.session_state.settings.get('deduplication_enabled', False), key="batch_upload_dedup")
 
-                    if st.button("🔄 Process Batch", width='stretch', key="batch_upload_button"):
+                    if st.button("🔄 Process Batch", use_container_width=True, key="batch_upload_button"):
                         with st.spinner('Processing files...'):
                             try:
                                 batch_processor = BatchProcessor()
@@ -476,7 +476,7 @@ Heading 2
                                                             file_name=f"{filename}.docx",
                                                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                             key=f"{filename}_docx",
-                                                            width='stretch'
+                                                            use_container_width=True
                                                         )
                                                 with col2:
                                                     if pdf:
@@ -551,7 +551,7 @@ Heading 2
         profile_col1, profile_col2, profile_col3, profile_col4 = st.columns(4)
         
         with profile_col1:
-            if st.button("📋 View Profiles", width='stretch'):
+            if st.button("📋 View Profiles", use_container_width=True):
                 profiles = bm_manager.list_profiles()
                 if profiles:
                     st.write("**Saved Profiles:**")
@@ -563,7 +563,7 @@ Heading 2
                     st.info("No saved profiles yet")
         
         with profile_col2:
-            if st.button("⏱️ Recent Mappings", width='stretch'):
+            if st.button("⏱️ Recent Mappings", use_container_width=True):
                 recent = recent_manager.list_recent_mappings()
                 if recent:
                     st.write("**Recently Used:**")
@@ -573,7 +573,7 @@ Heading 2
                     st.info("No recent mappings")
         
         with profile_col3:
-            if st.button("🗑️ Manage", width='stretch'):
+            if st.button("🗑️ Manage", use_container_width=True):
                 st.markdown("**Manage Profiles:**")
                 profiles = bm_manager.list_profiles()
                 if profiles:
@@ -590,7 +590,7 @@ Heading 2
                     st.info("No profiles to manage")
         
         with profile_col4:
-            if st.button("❓ Tutorial", width='stretch'):
+            if st.button("❓ Tutorial", use_container_width=True):
                 st.markdown("""
                 ### 📚 Resume Bookmark Guide
                 
@@ -815,7 +815,7 @@ Heading 2
                         
                         # Display as table
                         preview_df = pd.DataFrame(preview_rows)
-                        st.dataframe(preview_df, width='stretch')
+                        st.dataframe(preview_df, use_container_width=True)
                         
                         # Enhanced Mismatch handling options
                         if has_mismatch and num_cycles < len(detected_bookmarks):
@@ -869,7 +869,7 @@ Heading 2
                     inject_col1, inject_col2, inject_col3 = st.columns([2, 1, 1])
                     
                     with inject_col1:
-                        if st.button("✨ Inject Points into Resume", type="primary", width='stretch'):
+                        if st.button("✨ Inject Points into Resume", type="primary", use_container_width=True):
                             with st.spinner('Injecting points...'):
                                 try:
                                     resume_bytes.seek(0)
@@ -904,7 +904,7 @@ Heading 2
                                         file_name="Resume_Updated.docx",
                                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                         key="resume_download",
-                                        width='stretch'
+                                        use_container_width=True
                                     )
                                     
                                     # Save to recent mappings
@@ -945,7 +945,7 @@ Heading 2
                                     file_name="Resume_Previous.docx",
                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                     key="resume_undo_download",
-                                    width='stretch'
+                                    use_container_width=True
                                 )
                     
                     with inject_col3:
