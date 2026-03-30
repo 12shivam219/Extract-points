@@ -169,8 +169,7 @@ You can use •, -, *, +, or numbers (1. 2.) for bullet points.""")
             # Organize points by heading within each cycle
             for heading, points in structured_content.items():
                 heading_points = points[start_idx:min(end_idx, len(points))]
-                if heading_points:  # Only add heading and points for this cycle
-                    cycle_content.append(heading)
+                if heading_points:  # Only add points for this cycle
                     for point in heading_points:
                         # Extract point without bullet
                         extracted = self.extract_bullet_point(point)
