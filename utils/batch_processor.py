@@ -93,8 +93,8 @@ class BatchProcessor:
                 results.append({
                     filename: (
                         processed_text,
-                        docx_file.getvalue(),
-                        pdf_file.getvalue()
+                        docx_file.getvalue() if docx_file else b'',
+                        pdf_file.getvalue() if pdf_file else b''
                     )
                 })
                 
@@ -104,5 +104,6 @@ class BatchProcessor:
                 results.append({
                     Path(uploaded_file.name).stem: (error_msg, None, None)  # Tuple: (error_str, None, None)
                 })
+                logger.error(f"Error processing {uploaded_file.name}: {e}")
                 
         return results

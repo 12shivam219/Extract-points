@@ -104,6 +104,7 @@ class BookmarkManager:
         3. Prioritize "responsibilities" pattern bookmarks
         """
         if not bookmarks:
+            logger.warning("No bookmarks available for mapping suggestion")
             return {}
         
         mapping = {}
@@ -122,11 +123,16 @@ class BookmarkManager:
         # Use responsibility bookmarks first, then others
         ordered_bookmarks = responsibility_bookmarks + other_bookmarks
         
+        # If no bookmarks were categorized, just use all bookmarks
+        if not ordered_bookmarks:
+            ordered_bookmarks = bookmarks
+        
         # Map cycles sequentially to available bookmarks
         for cycle_num in range(1, num_cycles + 1):
             if cycle_num - 1 < len(ordered_bookmarks):
                 mapping[cycle_num] = ordered_bookmarks[cycle_num - 1]
         
+        logger.debug(f"Generated mapping for {len(mapping)} cycles from {len(bookmarks)} bookmarks")
         return mapping
     
     def save_profile(self, profile_name: str, bookmarks: List[str], 

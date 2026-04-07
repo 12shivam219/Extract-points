@@ -1,0 +1,25 @@
+# Core Application
+streamlit>=1.43.0
+python-docx>=1.1.2
+reportlab>=4.3.1
+python-dotenv>=1.0.0
+pandas>=2.0.0
+
+# AI/LLM
+groq>=0.4.0
+
+# Email Support
+# Note: These are optional depending on your email provider choice
+# Gmail (recommended - already built-in):
+# No additional packages needed!
+
+# Google Drive support (optional)
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.100.0
+
+# Dropbox support (optional)
+dropbox>=11.36.0
+
+# SendGrid support (optional)
+sendgrid>=6.10.0

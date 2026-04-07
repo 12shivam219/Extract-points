@@ -3,9 +3,11 @@ import re
 class TextProcessor:
     def __init__(self):
         # More flexible patterns to handle various formats
-        self.bullet_pattern = r'(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\))\s*(.*)'
+        # Bullet pattern: matches •, -, *, +, numbered lists like "1.", or (a), etc.
+        # Using negative lookahead to exclude lines that start with "--" or "---" (headers)
+        self.bullet_pattern = r'(?:•|(?<!\-)[\-](?!\-)|\*|\+|\d+\.|\([a-z0-9]\))\s*(.*)'
         # Headings: short lines (< 50 chars), no bullets, typically 1-5 words
-        self.heading_pattern = r'^(?!(?:•|\-|\*|\+|\d+\.|\([a-z0-9]\)))[A-Za-z0-9][A-Za-z0-9\s\.\-]*$'
+        self.heading_pattern = r'^(?!(?:•|[\-]|\*|\+|\d+\.|\([a-z0-9]\)))[A-Za-z0-9][A-Za-z0-9\s\.\-]*$'
 
     def is_heading(self, line):
         """Check if a line is a heading.

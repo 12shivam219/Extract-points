@@ -7,6 +7,9 @@ from utils.batch_resume_injector import BatchResumeInjector
 from utils.validators import InputValidator, MessageFormatter
 from utils.deduplicator import PointDeduplicator
 from utils.persistence import SettingsPersistence, RecentUsedManager
+from utils.gemini_points_generator import GeminiPointsGenerator, PointsValidator
+from utils.cloud_storage_manager import get_cloud_storage_manager
+from utils.email_sender import get_email_sender
 import io
 import zipfile
 from pathlib import Path
@@ -71,7 +74,7 @@ def main():
         st.session_state.batch_injection_results = None
 
     # Create tabs for single and batch processing
-    tab1, tab2, tab3, tab4 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection", "Batch Resume Injection"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection", "Batch Resume Injection", "Auto Points from Job Description", "📧 Send Resumes via Email"])
 
     with tab1:
         st.markdown("### 📝 Step 1: Input Your Text")
@@ -1203,6 +1206,507 @@ Heading 2
             st.info("📌 Step 1: Start by uploading resume templates")
         elif not batch_texts_data:
             st.info("📝 Step 2: Upload text files with extracted points")
+    
+    with tab5:
+        # Auto Points Generator from Job Description
+        st.markdown("### 🤖 Auto Points Generation from Job Description")
+        st.markdown("""
+        **Workflow:**
+        1. Enter job description
+        2. Enter desired job title
+        3. Set number of points per technology
+        4. Get AI-generated bullet points automatically (using FREE Groq API)
+        5. Use results with Tab 3 for resume injection
+        """)
+        
+        # Initialize session state for Tab 5
+        if 'tab5_api_key_valid' not in st.session_state:
+            st.session_state.tab5_api_key_valid = False
+        if 'tab5_tech_stacks' not in st.session_state:
+            st.session_state.tab5_tech_stacks = []
+        if 'tab5_generated_points' not in st.session_state:
+            st.session_state.tab5_generated_points = ""
+        
+        # Check if API key is configured
+        import os
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        
+        # Step 1: API Key Status
+        st.markdown("### Step 1: API Configuration")
+        if api_key and api_key != "your_api_key_here":
+            st.success("✅ Groq API Key configured from .env (FREE, no quota issues)")
+            st.session_state.tab5_api_key_valid = True
+        else:
+            st.error("❌ Groq API Key not found!")
+            with st.expander("🔧 Setup Instructions", expanded=True):
+                st.markdown("""
+                **Step 1: Get your FREE Groq API Key**
+                1. Visit: https://console.groq.com/keys
+                2. Sign up (free, no credit card needed)
+                3. Generate new API Key
+                4. Copy the key
+                
+                **Step 2: Store it in .env file**
+                1. Open the `.env` file in the project root
+                2. Replace with your actual key:
+                   ```
+                   GROQ_API_KEY=your_actual_key_here
+                   ```
+                3. Save the file
+                   
+                **Step 3: Restart the app**
+                ```bash
+                streamlit run main.py
+                ```
+                
+                ✅ **Why Groq?**
+                - Completely FREE (no limits exceeded)
+                - Super fast (runs on specialized hardware)
+                - Generous free tier (100+ requests daily)
+                - No credit card required
+                """)
+        
+        # Step 2: Job Description Input
+        st.markdown("### Step 2: Job Description")
+        job_description = st.text_area(
+            "Paste the job description",
+            height=250,
+            placeholder="Paste job description here...",
+            key="tab5_job_description",
+            disabled=not st.session_state.tab5_api_key_valid
+        )
+        
+        # Step 3: Job Details
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            job_title = st.text_input(
+                "Job Title",
+                placeholder="e.g., Senior Full Stack Developer",
+                key="tab5_job_title",
+                disabled=not st.session_state.tab5_api_key_valid
+            )
+        
+        with col2:
+            num_points = st.number_input(
+                "Points per Technology",
+                min_value=1,
+                max_value=5,
+                value=3,
+                key="tab5_num_points",
+                help="Number of bullet points per tech stack",
+                disabled=not st.session_state.tab5_api_key_valid
+            )
+        
+        with col3:
+            st.markdown("###")  # Spacing
+            process_button = st.button(
+                "🚀 Generate Points",
+                use_container_width=True,
+                key="tab5_process_button",
+                disabled=not st.session_state.tab5_api_key_valid
+            )
+        
+        # Process Job Description
+        if process_button:
+            if not job_description or not job_description.strip():
+                st.error("❌ Please provide a job description")
+            elif not job_title or not job_title.strip():
+                st.error("❌ Please provide a job title")
+            else:
+                try:
+                    with st.spinner("🔄 Processing with Groq AI..."):
+                        # Initialize generator (will use .env API key)
+                        generator = GeminiPointsGenerator()
+                        
+                        # Generate points
+                        tech_stacks, generated_points = generator.process_job_description(
+                            job_description=job_description,
+                            job_title=job_title,
+                            num_points=num_points
+                        )
+                        
+                        # Store in session
+                        st.session_state.tab5_tech_stacks = tech_stacks
+                        st.session_state.tab5_generated_points = generated_points
+                        
+                        st.success("✅ Points generated successfully!")
+                
+                except ValueError as e:
+                    st.error(f"❌ Validation Error: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+                    with st.expander("Technical Details"):
+                        st.code(str(e))
+        
+        # Display Results
+        if st.session_state.tab5_tech_stacks and st.session_state.tab5_generated_points:
+            st.markdown("### 📊 Results")
+            
+            # Show extracted tech stacks
+            st.markdown("#### 🔧 Extracted Technologies")
+            tech_stack_text = ", ".join(st.session_state.tab5_tech_stacks)
+            st.info(f"Found: {tech_stack_text}")
+            
+            # Show generated points
+            st.markdown("#### 📝 Generated Bullet Points")
+            st.text_area(
+                "Your auto-generated points",
+                value=st.session_state.tab5_generated_points,
+                height=400,
+                disabled=True,
+                key="tab5_output",
+                label_visibility="collapsed"
+            )
+            
+            # Export Options
+            st.markdown("#### 📥 Export Options")
+            
+            export_col1, export_col2, export_col3 = st.columns(3)
+            
+            with export_col1:
+                if st.button("📋 Copy to Clipboard", use_container_width=True, key="tab5_copy"):
+                    st.code(st.session_state.tab5_generated_points)
+                    st.toast("✅ Ready to copy!")
+            
+            with export_col2:
+                # Download as DOCX
+                export_handler = ExportHandler()
+                docx_file = export_handler.generate_docx(st.session_state.tab5_generated_points)
+                st.download_button(
+                    label="📄 Download DOCX",
+                    data=docx_file.getvalue(),
+                    file_name="generated_points.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True,
+                    key="tab5_download_docx"
+                )
+            
+            with export_col3:
+                # Download as PDF
+                pdf_file = export_handler.generate_pdf(st.session_state.tab5_generated_points)
+                st.download_button(
+                    label="📄 Download PDF",
+                    data=pdf_file.getvalue(),
+                    file_name="generated_points.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="tab5_download_pdf"
+                )
+            
+            # Pass to Tab 3 Option
+            st.markdown("#### 🔗 Next Steps")
+            if st.button("➡️ Use These Points in Tab 3 (Resume Injection)", use_container_width=True, key="tab5_to_tab3"):
+                st.session_state.input_text = st.session_state.tab5_generated_points
+                st.info("✅ Points copied to Tab 3! Go to Tab 3 → Step 2 to inject into your resume.")
+            
+            # Clear option
+            if st.button("🔄 Clear Results", use_container_width=True, key="tab5_clear"):
+                st.session_state.tab5_tech_stacks = []
+                st.session_state.tab5_generated_points = ""
+                st.rerun()
+    
+    with tab6:
+        st.markdown("### 📧 Send Resumes via Email")
+        st.markdown("""
+        Send resumes from your cloud storage (OneDrive, Google Drive, Dropbox) 
+        without needing to login to office email on this laptop.
+        
+        **Features:**
+        - ✅ Access resumes from cloud storage
+        - ✅ Send via Gmail with App Password (no login required)
+        - ✅ Send via Outlook/Office 365
+        - ✅ Send multiple resumes at once
+        - ✅ Track email history
+        """)
+        
+        # Initialize session state for email tab
+        if 'email_tab_resumes' not in st.session_state:
+            st.session_state.email_tab_resumes = {}
+        if 'email_history' not in st.session_state:
+            st.session_state.email_history = []
+        
+        # Step 1: Select Cloud Storage Provider
+        st.markdown("### Step 1️⃣ : Select Cloud Storage Provider")
+        
+        cloud_provider = st.radio(
+            "Where are your resumes stored?",
+            options=["onedrive", "google", "dropbox"],
+            format_func=lambda x: {
+                "onedrive": "☁️ OneDrive",
+                "google": "🔵 Google Drive",
+                "dropbox": "🔷 Dropbox"
+            }[x],
+            horizontal=True,
+            key="cloud_provider"
+        )
+        
+        # Load resumes from selected provider
+        if st.button("🔄 Load Resumes from Cloud", use_container_width=True, key="load_cloud_resumes"):
+            with st.spinner("Loading resumes from cloud storage..."):
+                try:
+                    storage_manager = get_cloud_storage_manager(cloud_provider)
+                    resumes = storage_manager.list_files()
+                    
+                    if resumes:
+                        st.session_state.email_tab_resumes = {r['name']: r for r in resumes}
+                        st.success(f"✅ Loaded {len(resumes)} resume(s) from {cloud_provider.title()}")
+                    else:
+                        st.warning(f"⚠️ No resumes found in {cloud_provider.title()}")
+                        st.info("💡 Make sure you have a 'Resumes' folder in your cloud storage")
+                except Exception as e:
+                    st.error(f"❌ Error loading resumes: {str(e)}")
+                    st.info("💡 Check that you're connected to the internet and have access to cloud storage")
+        
+        # Display loaded resumes
+        if st.session_state.email_tab_resumes:
+            st.success(f"✅ Found {len(st.session_state.email_tab_resumes)} resume(s)")
+            with st.expander("📄 Available Resumes", expanded=True):
+                for resume_name, resume_info in st.session_state.email_tab_resumes.items():
+                    size_kb = resume_info['size'] / 1024
+                    st.write(f"📄 **{resume_name}** ({size_kb:.1f} KB)")
+        
+        # Step 2: Select Email Provider
+        st.markdown("### Step 2️⃣ : Select Email Provider")
+        
+        email_provider = st.radio(
+            "How do you want to send emails?",
+            options=["gmail", "outlook", "sendgrid"],
+            format_func=lambda x: {
+                "gmail": "📧 Gmail (App Password)",
+                "outlook": "📧 Outlook/Office 365",
+                "sendgrid": "📧 SendGrid API"
+            }[x],
+            horizontal=True,
+            key="email_provider"
+        )
+        
+        # Email provider setup instructions
+        with st.expander("ℹ️ Setup Instructions for " + email_provider.title(), expanded=True):
+            if email_provider == "gmail":
+                st.markdown("""
+                **Gmail Setup (No Login Required):**
+                
+                1. Go to [myaccount.google.com](https://myaccount.google.com)
+                2. Click **Security** (left sidebar)
+                3. Enable **2-Step Verification** (if not already enabled)
+                4. Go back to Security page
+                5. Find **App Passwords** (appears after 2FA is enabled)
+                6. Select "Mail" and "Windows Computer"
+                7. Copy the **16-character password** shown
+                8. Paste it below
+                
+                ✅ **Benefit:** No need to login to Gmail on office laptop!
+                """)
+                
+                gmail_email = st.text_input(
+                    "Gmail Address",
+                    placeholder="your.email@gmail.com",
+                    key="gmail_email_input",
+                    help="Your Gmail address"
+                )
+                
+                gmail_password = st.text_input(
+                    "Gmail App Password",
+                    type="password",
+                    placeholder="16-character app password",
+                    key="gmail_password_input",
+                    help="16-character password from Google Account"
+                )
+            
+            elif email_provider == "outlook":
+                st.markdown("""
+                **Outlook Setup:**
+                
+                1. Enter your Office 365 email address
+                2. Enter your password (or App Password if 2FA is enabled)
+                3. If 2FA enabled, get app password from:
+                   - Go to [account.microsoft.com](https://account.microsoft.com)
+                   - Click **Security** → **App passwords**
+                """)
+                
+                outlook_email = st.text_input(
+                    "Outlook/Office Email",
+                    placeholder="your.email@company.com",
+                    key="outlook_email_input"
+                )
+                
+                outlook_password = st.text_input(
+                    "Password or App Password",
+                    type="password",
+                    placeholder="Your password",
+                    key="outlook_password_input"
+                )
+            
+            else:  # sendgrid
+                st.markdown("""
+                **SendGrid Setup (Most Professional):**
+                
+                1. Create free account at [sendgrid.com](https://sendgrid.com)
+                2. Create API Key
+                3. Set environment variable: `SENDGRID_API_KEY`
+                   
+                Or paste API key below:
+                """)
+                
+                sendgrid_api_key = st.text_input(
+                    "SendGrid API Key",
+                    type="password",
+                    placeholder="SG.xxxxx...",
+                    key="sendgrid_api_key_input"
+                )
+        
+        # Step 3: Email Recipients
+        st.markdown("### Step 3️⃣ : Email Recipients")
+        
+        recipients_input = st.text_area(
+            "Email addresses (one per line)",
+            placeholder="john@example.com\njane@example.com\nbob@example.com",
+            height=150,
+            key="email_recipients_input",
+            help="Enter one email address per line"
+        )
+        
+        # Parse recipients
+        recipients = [email.strip() for email in recipients_input.split('\n') if email.strip()]
+        if recipients:
+            st.success(f"✅ {len(recipients)} recipient(s) added")
+        
+        # Step 4: Email Content
+        st.markdown("### Step 4️⃣ : Email Content")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            email_subject = st.text_input(
+                "Email Subject",
+                value="Resume for Your Review",
+                key="email_subject_input"
+            )
+        
+        with col2:
+            resume_to_send = st.selectbox(
+                "Select Resume",
+                options=list(st.session_state.email_tab_resumes.keys()) if st.session_state.email_tab_resumes else ["No resumes loaded"],
+                key="resume_to_send_select"
+            )
+        
+        email_body = st.text_area(
+            "Email Message",
+            value="""Dear Hiring Manager,
+
+Please find my resume attached for your review.
+
+Thank you for your time and consideration.
+
+Best regards,
+Your Name""",
+            height=200,
+            key="email_body_input"
+        )
+        
+        # Step 5: Send Emails
+        st.markdown("### Step 5️⃣ : Send Emails")
+        
+        if st.button("🚀 Send Emails", use_container_width=True, key="send_emails_button"):
+            if not recipients:
+                st.error("❌ Please add at least one recipient")
+            elif not resume_to_send or resume_to_send == "No resumes loaded":
+                st.error("❌ Please load and select a resume")
+            elif email_provider == "gmail" and (not gmail_email or not gmail_password):
+                st.error("❌ Please enter Gmail email and App Password")
+            elif email_provider == "outlook" and (not outlook_email or not outlook_password):
+                st.error("❌ Please enter Outlook email and password")
+            else:
+                with st.spinner("Sending emails..."):
+                    try:
+                        # Get email sender
+                        if email_provider == "gmail":
+                            sender = get_email_sender("gmail", 
+                                                     sender_email=gmail_email,
+                                                     app_password=gmail_password)
+                        elif email_provider == "outlook":
+                            sender = get_email_sender("outlook",
+                                                     sender_email=outlook_email,
+                                                     password=outlook_password)
+                        else:
+                            sender = get_email_sender("sendgrid",
+                                                     api_key=sendgrid_api_key if sendgrid_api_key else None)
+                        
+                        if not sender:
+                            st.error("❌ Failed to initialize email sender")
+                        else:
+                            # Get resume from cloud storage
+                            storage_manager = get_cloud_storage_manager(cloud_provider)
+                            resume_info = st.session_state.email_tab_resumes[resume_to_send]
+                            resume_content = storage_manager.download_file(resume_info['path'])
+                            
+                            if not resume_content:
+                                st.error("❌ Failed to download resume from cloud storage")
+                            else:
+                                # Send to each recipient
+                                success_count = 0
+                                failed_recipients = []
+                                
+                                progress_bar = st.progress(0)
+                                status_text = st.empty()
+                                
+                                for idx, recipient in enumerate(recipients):
+                                    status_text.text(f"Sending to {recipient} ({idx + 1}/{len(recipients)})...")
+                                    
+                                    # Download fresh copy of resume for each recipient
+                                    resume_content.seek(0)
+                                    
+                                    success = sender.send_email(
+                                        recipient=recipient,
+                                        subject=email_subject,
+                                        body=email_body,
+                                        attachments=[(resume_to_send, resume_content)]
+                                    )
+                                    
+                                    if success:
+                                        success_count += 1
+                                        st.session_state.email_history.append({
+                                            "recipient": recipient,
+                                            "resume": resume_to_send,
+                                            "timestamp": pd.Timestamp.now(),
+                                            "status": "Success"
+                                        })
+                                    else:
+                                        failed_recipients.append(recipient)
+                                        st.session_state.email_history.append({
+                                            "recipient": recipient,
+                                            "resume": resume_to_send,
+                                            "timestamp": pd.Timestamp.now(),
+                                            "status": "Failed"
+                                        })
+                                    
+                                    progress_bar.progress((idx + 1) / len(recipients))
+                                
+                                status_text.empty()
+                                progress_bar.empty()
+                                
+                                # Results summary
+                                st.success(f"✅ Successfully sent to {success_count}/{len(recipients)} recipients")
+                                
+                                if failed_recipients:
+                                    st.warning(f"⚠️ Failed to send to: {', '.join(failed_recipients)}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error sending emails: {str(e)}")
+                        with st.expander("Technical Details"):
+                            st.code(str(e))
+        
+        # Email History
+        st.markdown("### 📋 Email History")
+        if st.session_state.email_history:
+            history_df = pd.DataFrame(st.session_state.email_history)
+            st.dataframe(history_df, use_container_width=True)
+            
+            if st.button("🗑️ Clear History", use_container_width=True):
+                st.session_state.email_history = []
+                st.rerun()
+        else:
+            st.info("No emails sent yet")
 
 if __name__ == "__main__":
     main()
