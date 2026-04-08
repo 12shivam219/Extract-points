@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 from .resume_injector import ResumeInjector
+from .security_utils import FileUploadValidator, InputSanitizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -21,7 +22,7 @@ class BatchResumeInjector:
     
     def validate_resume_files(self, resume_files: List) -> Tuple[bool, str, Dict]:
         """
-        Validate uploaded resume files.
+        Validate uploaded resume files with security checks.
         
         Returns:
             Tuple of (is_valid: bool, error_message: str, resume_data: Dict)
@@ -35,7 +36,17 @@ class BatchResumeInjector:
         resume_data = {}
         for resume_file in resume_files:
             try:
-                filename = Path(resume_file.name).stem
+                # Security: Validate file upload
+                is_valid, error_msg = FileUploadValidator.validate_resume_upload(resume_file, resume_file.name)
+                if not is_valid:
+                    return False, f"❌ {resume_file.name}: {error_msg}", {}
+                
+                # Security: Sanitize filename
+                is_valid, sanitized_filename = InputSanitizer.validate_filename(Path(resume_file.name).stem)
+                if not is_valid:
+                    return False, f"❌ Invalid filename: {sanitized_filename}", {}
+                
+                filename = sanitized_filename
                 resume_bytes = io.BytesIO(resume_file.read())
                 resume_bytes.seek(0)
                 
@@ -61,7 +72,7 @@ class BatchResumeInjector:
     
     def validate_text_files(self, text_files: List) -> Tuple[bool, str, Dict]:
         """
-        Validate uploaded text files.
+        Validate uploaded text files with security checks.
         
         Returns:
             Tuple of (is_valid: bool, error_message: str, text_data: Dict)
@@ -75,7 +86,17 @@ class BatchResumeInjector:
         text_data = {}
         for text_file in text_files:
             try:
-                filename = Path(text_file.name).stem
+                # Security: Validate file upload
+                is_valid, error_msg = FileUploadValidator.validate_text_upload(text_file, text_file.name)
+                if not is_valid:
+                    return False, f"❌ {text_file.name}: {error_msg}", {}
+                
+                # Security: Sanitize filename
+                is_valid, sanitized_filename = InputSanitizer.validate_filename(Path(text_file.name).stem)
+                if not is_valid:
+                    return False, f"❌ Invalid filename: {sanitized_filename}", {}
+                
+                filename = sanitized_filename
                 content = text_file.read()
                 
                 # Try UTF-8 first, then latin-1, then with replacement
@@ -94,7 +115,9 @@ class BatchResumeInjector:
                 }
                 
             except Exception as e:
-                return False, f"❌ {text_file.name}: {str(e)}", {}
+                # Sanitize error to prevent information disclosure
+                sanitized_error = InputSanitizer.sanitize_error_message(e, user_facing=True)
+                return False, f"❌ {text_file.name}: {sanitized_error}", {}
         
         return True, "", text_data
     

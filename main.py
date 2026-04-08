@@ -15,9 +15,28 @@ import zipfile
 from pathlib import Path
 import pandas as pd
 import logging
+import os
 
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# ==================== CACHING FUNCTIONS ====================
+@st.cache_resource
+def get_neon_manager():
+    """Cache Neon manager for entire session"""
+    from utils.neon_resume_manager import NeonResumeManager
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return None
+    return NeonResumeManager(db_url)
+
+@st.cache_resource
+def get_automation_workflow():
+    """Cache automation workflow for entire session"""
+    from automation_workflow import AutomationWorkflow
+    return AutomationWorkflow()
+
+# ===========================================================
 
 def main():
     st.set_page_config(
@@ -74,7 +93,7 @@ def main():
         st.session_state.batch_injection_results = None
 
     # Create tabs for single and batch processing
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection", "Batch Resume Injection", "Auto Points from Job Description", "📧 Send Resumes via Email"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Single File Processing", "Batch Processing", "Resume Template Injection", "Batch Resume Injection", "Auto Points from Job Description", "📧 Send Resumes via Email", "🚀 Complete Automation"])
 
     with tab1:
         st.markdown("### 📝 Step 1: Input Your Text")
@@ -257,10 +276,12 @@ Heading 2
 • Item A
 • Item B""")
             except Exception as e:
+                from utils.security_utils import InputSanitizer
+                sanitized_error = InputSanitizer.sanitize_error_message(e, user_facing=True)
                 st.error(f"❌ Unexpected error: {type(e).__name__}")
                 st.info(f"Please try again or contact support if the issue persists.")
                 with st.expander("Technical details"):
-                    st.code(str(e))
+                    st.code(sanitized_error)
 
     with tab2:
         # Batch processing UI
@@ -1234,7 +1255,6 @@ Heading 2
         # Step 1: API Key Status
         st.markdown("### Step 1: API Configuration")
         if api_key and api_key != "your_api_key_here":
-            st.success("✅ Groq API Key configured from .env (FREE, no quota issues)")
             st.session_state.tab5_api_key_valid = True
         else:
             st.error("❌ Groq API Key not found!")
@@ -1495,8 +1515,6 @@ Heading 2
                 6. Select "Mail" and "Windows Computer"
                 7. Copy the **16-character password** shown
                 8. Paste it below
-                
-                ✅ **Benefit:** No need to login to Gmail on office laptop!
                 """)
                 
                 gmail_email = st.text_input(
@@ -1707,6 +1725,366 @@ Your Name""",
                 st.rerun()
         else:
             st.info("No emails sent yet")
+    
+    with tab7:
+        st.markdown("## 🚀 Complete Resume Automation")
+        st.markdown("""
+        **One-Click Automation:** Job Description → Auto-Select Resume → Generate Points → Inject → Download
+        """)
+        
+        # Use cached workflow (same instance for entire session)
+        workflow = get_automation_workflow()
+        
+        # STEP 0: Resume Storage Location
+        st.markdown("### 📂 Step 0: Resume Storage Location")
+        
+        storage_option = st.radio(
+            "Where are your resumes stored?",
+            options=["local", "google_drive", "onedrive", "neon", "upload"],
+            format_func=lambda x: {
+                "local": "💻 Local Folder (./resumes/)",
+                "google_drive": "🔵 Google Drive (Shared Team)",
+                "onedrive": "☁️ OneDrive (Personal/Company)",
+                "neon": "🐘 Neon PostgreSQL (Database)",
+                "upload": "📤 Upload Files Now"
+            }[x],
+            horizontal=True,
+            key="resume_storage_location"
+        )
+        
+        # Show instructions for each storage option
+        with st.expander("📖 How to Store Resumes", expanded=storage_option=="upload"):
+            if storage_option == "local":
+                st.markdown("""
+                **Local Storage (Your Computer):**
+                1. Create folder: `./resumes/`
+                2. Add resume files with format: `PersonName_Tech1_Tech2.docx`
+                   - Example: `John_Python_Django.docx`
+                   - Example: `John_React_Node.docx`
+                3. Add Word bookmarks to your resume sections
+                4. Run: `python setup_resumes.py`
+                5. System automatically detects and registers all resumes
+                """)
+            
+            elif storage_option == "google_drive":
+                st.markdown("""
+                **Google Drive (Team Resumes):**
+                1. Create folder in Google Drive: "Resumes"
+                2. Upload resume files
+                3. Right-click folder → Share → Get shareable link
+                4. In app: Add Google Drive API credentials
+                5. System auto-syncs from shared folder
+                
+                **Setup in .env:**
+                ```
+                GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
+                ```
+                
+                Get folder ID from URL: 
+                `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+                """)
+            
+            elif storage_option == "onedrive":
+                st.markdown("""
+                **OneDrive (Company/Personal):**
+                1. Create folder: "Resumes" in OneDrive root
+                2. Upload all resume files
+                3. Share folder with team (if needed)
+                4. System auto-syncs from folder
+                
+                **Setup in .env:**
+                ```
+                ONEDRIVE_FOLDER_PATH=/Resumes
+                ```
+                
+                **For Company Account:**
+                - Use Office 365 credentials
+                - Set folder in SharePoint
+                """)
+            
+            elif storage_option == "neon":
+                st.markdown("""
+                **Neon PostgreSQL (Database):**
+                1. Create free account at neon.tech
+                2. Create database
+                3. Copy connection string
+                4. Add to .env:
+                   ```
+                   DATABASE_URL=postgresql://user:password@host:5432/db
+                   AWS_S3_BUCKET=resume-files
+                   ```
+                5. Run setup:
+                   ```
+                   python setup_neon.py
+                   ```
+                6. Upload resumes (auto-stores metadata in Neon)
+                
+                **Best for:**
+                - Teams sharing resume catalog
+                - Tracking resume versions
+                - Multiple users, one database
+                - Production deployments
+                """)
+            
+            elif storage_option == "upload":
+                st.markdown("""
+                **Upload Files (One-Time):**
+                1. Select your resume files
+                2. Files stored in app session
+                3. Use with current job application
+                4. Files clear after app refresh
+                
+                **For Persistent Storage:**
+                Use Local, Google Drive, OneDrive, or Neon instead
+                """)
+        
+        # NEON STORAGE: User authentication & resume upload
+        if storage_option == "neon":
+            st.markdown("### 🔐 Neon Account & Resume Upload")
+            
+            # Use cached Neon manager (same instance for entire session)
+            neon_mgr = get_neon_manager()
+            
+            if not neon_mgr:
+                st.error("❌ Neon database not configured on server")
+                st.stop()
+            
+            # User email for identification
+            user_email = st.text_input(
+                "Your Email Address",
+                placeholder="your.email@example.com",
+                key="neon_user_email",
+                help="Used to identify your resume collection"
+            )
+            
+            if user_email and '@' in user_email:
+                # Show user's existing resumes
+                st.markdown("#### 📄 Your Resumes")
+                
+                # Cache user resumes in session state
+                cache_key = f"neon_resumes_{user_email}"
+                if cache_key not in st.session_state or st.session_state.get('force_reload_neon', False):
+                    success, user_resumes = neon_mgr.get_user_resumes(user_email)
+                    st.session_state[cache_key] = user_resumes
+                    st.session_state.force_reload_neon = False
+                else:
+                    user_resumes = st.session_state[cache_key]
+                
+                if user_resumes:
+                    st.success(f"✅ You have {len(user_resumes)} resume(s) in database")
+                    
+                    with st.expander("View Your Resumes", expanded=True):
+                        for resume in user_resumes:
+                            col1, col2, col3 = st.columns([3, 1, 1])
+                            
+                            with col1:
+                                techs = ", ".join(resume['technologies']) if resume['technologies'] else "N/A"
+                                st.write(f"📄 **{resume['filename']}**")
+                                st.caption(f"Tech: {techs} | Size: {resume['size']/1024:.1f}KB")
+                            
+                            with col2:
+                                if st.button("📥", key=f"download_{resume['id']}", help="Download"):
+                                    success, content = neon_mgr.get_resume_file(resume['id'])
+                                    if success:
+                                        st.download_button(
+                                            label="Download",
+                                            data=content.getvalue(),
+                                            file_name=resume['filename'],
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            key=f"dl_{resume['id']}"
+                                        )
+                            
+                            with col3:
+                                if st.button("🗑️", key=f"delete_{resume['id']}", help="Delete"):
+                                    success, msg = neon_mgr.delete_resume(resume['id'], user_email)
+                                    if success:
+                                        st.session_state.force_reload_neon = True
+                                        st.success("Resume deleted")
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                else:
+                    st.info("No resumes yet. Upload your first resume below!")
+                
+                # Upload new resume
+                st.markdown("#### ⬆️ Upload New Resume")
+                
+                uploaded_file = st.file_uploader(
+                    "Choose a resume file",
+                    type=["docx"],
+                    key="neon_resume_upload"
+                )
+                
+                if uploaded_file:
+                    if st.button("💾 Save to Neon Database", use_container_width=True, key="neon_save_button"):
+                        with st.spinner("Uploading to database..."):
+                            success, msg = neon_mgr.upload_resume(
+                                uploaded_file,
+                                uploaded_file.name,
+                                user_email
+                            )
+                            
+                            if success:
+                                st.session_state.force_reload_neon = True
+                                st.success(f"✅ {msg}")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {msg}")
+            else:
+                st.warning("⚠️ Enter your email to get started")
+        
+        # Load resumes based on storage option
+        elif storage_option == "upload":
+            uploaded_files = st.file_uploader(
+                "Upload Your Resumes",
+                type=["docx"],
+                accept_multiple_files=True,
+                key="resume_upload_files"
+            )
+            
+            if uploaded_files:
+                st.success(f"✅ {len(uploaded_files)} resume(s) selected")
+                # Store in session for use
+                st.session_state.uploaded_resumes = {f.name: f for f in uploaded_files}
+        
+        # Show resume catalog
+        st.markdown("### 📋 Resume Catalog")
+        
+        if storage_option == "neon":
+            # Show Neon catalog statistics
+            stats = neon_mgr.get_stats()
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Resumes (Database)", stats.get('total_resumes', 0))
+            with col2:
+                st.metric("Users", stats.get('total_users', 0))
+            with col3:
+                st.metric("Applications", stats.get('total_jobs', 0))
+            
+            if stats.get('total_resumes', 0) == 0:
+                st.error("❌ No resumes in database!")
+                st.info("💡 Upload your resume above first")
+                st.stop()
+            
+            # Get user's resumes from Neon for the automation
+            success, user_resumes = neon_mgr.get_user_resumes(user_email) if user_email else (False, [])
+            
+            if not user_resumes:
+                st.error("❌ No resumes in your account!")
+                st.info("💡 Upload a resume above to use in automation")
+                st.stop()
+        else:
+            # Show local/cloud catalog statistics (cached in session)
+            if 'catalog_summary' not in st.session_state:
+                st.session_state.catalog_summary = workflow.catalog.get_catalog_summary()
+            
+            summary = st.session_state.catalog_summary
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Resumes", summary['total_resumes'])
+            with col2:
+                st.metric("Local", summary['local_resumes'])
+            with col3:
+                st.metric("Technologies", len(summary['unique_technologies']))
+            
+            if summary['total_resumes'] == 0 and storage_option != "upload":
+                st.error("❌ No resumes found in selected location!")
+                st.info(f"💡 Please add resumes to your {storage_option} storage location")
+                st.stop()
+            elif storage_option == "upload" and not st.session_state.get('uploaded_resumes'):
+                st.error("❌ No resumes uploaded!")
+                st.stop()
+        
+        # Input section
+        st.markdown("### 📝 Job Details")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            job_title = st.text_input("Job Title", placeholder="e.g., Senior Java Developer")
+        with col2:
+            points_per_tech = st.slider("Points per Technology", 1, 5, 2)
+        
+        job_description = st.text_area(
+            "Job Description",
+            height=250,
+            placeholder="Paste job description here..."
+        )
+        
+        recruiter_email = st.text_input("Recruiter Email", placeholder="recruiter@company.com")
+        
+        # Optional message
+        st.markdown("### 💬 Personalized Message (Optional)")
+        personal_message = st.text_area(
+            "Leave blank for auto-generated message",
+            height=100,
+            placeholder="Hi, I'm interested in..."
+        )
+        
+        # Run automation
+        if st.button("🚀 Run Automation", use_container_width=True):
+            if not job_title:
+                st.error("❌ Enter job title")
+            elif not job_description or len(job_description) < 50:
+                st.error("❌ Job description too short (min 50 chars)")
+            elif not recruiter_email or '@' not in recruiter_email:
+                st.error("❌ Invalid email address")
+            else:
+                with st.spinner("🔄 Processing..."):
+                    try:
+                        # Run workflow
+                        success, result = workflow.run_workflow(
+                            job_description=job_description,
+                            job_title=job_title,
+                            points_per_tech=points_per_tech,
+                            recruiter_email=recruiter_email,
+                            personal_message=personal_message
+                        )
+                        
+                        if success:
+                            st.success("✅ Automation Completed!")
+                            
+                            # Show results
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Selected Resume", result['selected_resume']['name'].split('.')[0])
+                            with col2:
+                                st.metric("Match Score", f"{result['match_score']:.0f}%")
+                            with col3:
+                                st.metric("Points Injected", 8)
+                            
+                            # Download button
+                            resume_path = result['resume_file_path']
+                            with open(resume_path, 'rb') as f:
+                                st.download_button(
+                                    label="📥 Download Updated Resume",
+                                    data=f.read(),
+                                    file_name=Path(resume_path).name,
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    use_container_width=True
+                                )
+                            
+                            # Show what was generated
+                            st.markdown("### 📊 Generated Points Preview")
+                            with st.expander("View Generated Points"):
+                                st.text(result['generated_text'][:500] + "...")
+                            
+                            # Show execution log
+                            with st.expander("📋 Execution Log"):
+                                if result.get('log_file'):
+                                    import json
+                                    with open(result['log_file'], 'r') as f:
+                                        log_data = json.load(f)
+                                        for step in log_data:
+                                            st.write(f"**{step['step']}:** {step['status']}")
+                        else:
+                            st.error("❌ Automation failed")
+                            for error in result.get('errors', []):
+                                st.error(f"  - {error}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
 
 if __name__ == "__main__":
     main()
