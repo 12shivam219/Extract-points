@@ -19,7 +19,7 @@ import os
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 import io
 
 # Import internal modules
